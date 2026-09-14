@@ -1,0 +1,35 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*service-account*.json
+*service_account*.json
+credentials.json
+secrets.json
+
+# ML datasets
+ml/data/*.csv
+
+# ML generated artifacts
+ml/output/*
+!ml/output/.gitkeep
+
+# Logs / temporary files
+*.log
+*.tmp
+*.temp
+.cache/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

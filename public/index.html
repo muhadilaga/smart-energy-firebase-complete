@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Smart Energy Monitoring</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div id="authLoading" class="screen screen--center">
+    <div class="card login-card" style="padding:40px"><h1>Smart Energy Monitoring</h1><p class="subtitle">Memeriksa sesi...</p></div>
+  </div>
+  <div id="loginView" class="screen screen--center hidden">
+    <section class="card login-card">
+      <div class="brand-mark">
+        <span class="material-symbols-outlined">bolt</span>
+      </div>
+      <h1>Smart Energy Monitoring</h1>
+      <p class="subtitle">Sistem Monitoring Energi Listrik Berbasis IoT</p>
+
+      <form id="loginForm" class="stack" autocomplete="on">
+        <label class="field">
+          <span>Email</span>
+          <input id="email" type="email" placeholder="nama@email.com" autocomplete="email" required>
+        </label>
+
+        <label class="field">
+          <span>Password</span>
+          <div class="password-row">
+            <input id="password" type="password" placeholder="Masukkan password" autocomplete="current-password" required>
+            <button id="togglePasswordBtn" class="icon-btn" type="button" aria-label="Tampilkan password">
+              <span class="material-symbols-outlined">visibility</span>
+            </button>
+          </div>
+        </label>
+
+        <button id="loginBtn" class="primary-btn" type="submit">
+          <span class="btn-text">Masuk</span>
+          <span class="btn-spinner hidden" aria-hidden="true"></span>
+        </button>
+      </form>
+
+      <p id="loginMsg" class="message" role="status" aria-live="polite"></p>
+    </section>
+  </div>
+
+  <div id="appView" class="app hidden">
+    <div class="app-shell">
+      <aside class="desktop-sidebar" aria-label="Navigasi desktop">
+        <div class="desktop-sidebar__brand">
+          <div class="brand-mark brand-mark--small">
+            <span class="material-symbols-outlined">bolt</span>
+          </div>
+          <div>
+            <div class="eyebrow">Smart Energy Monitoring</div>
+            <strong>Dashboard</strong>
+          </div>
+        </div>
+        <nav class="desktop-nav" aria-label="Navigasi utama desktop">
+          <button class="desktop-nav__item desktop-nav__item--active" data-page="dashboard" type="button">Dashboard</button>
+          <button class="desktop-nav__item" data-page="monitoring" type="button">Monitoring</button>
+          <button class="desktop-nav__item" data-page="riwayat" type="button">Riwayat</button>
+          <button class="desktop-nav__item" data-page="prediksi" type="button">Prediksi</button>
+          <button class="desktop-nav__item" data-page="pengaturan" type="button">Pengaturan</button>
+        </nav>
+      </aside>
+      <div class="app-shell__main">
+    <header class="topbar">
+      <div class="topbar__title">
+        <div class="eyebrow">Smart Energy Monitoring</div>
+        <h1>Dashboard</h1>
+        <p>Monitoring Konsumsi Energi Listrik Berbasis IoT</p>
+      </div>
+      <button id="logoutBtn" class="icon-btn icon-btn--raised" type="button" aria-label="Keluar">
+        <span class="material-symbols-outlined">logout</span>
+      </button>
+    </header>
+
+    <main class="content">
+      <section id="dashboardSection" class="page-section hidden-desktop">
+        <section class="hero card">
+          <div class="hero__head">
+            <div>
+              <div class="badge-row">
+                <span class="status-dot status-dot--online" id="statusDot"></span>
+                <span id="deviceStatus" class="status-text">Memuat...</span>
+              </div>
+              <h2>Daya Saat Ini</h2>
+              <p class="muted">ESP32-01 · Real-time</p>
+            </div>
+            <div class="hero__chip" id="lastUpdateText">Belum ada pembaruan</div>
+          </div>
+
+          <div class="gauge-wrap">
+            <div class="gauge">
+              <svg class="gauge__svg" viewBox="0 0 240 140" aria-hidden="true">
+                <path class="gauge__track" d="M 30 110 A 90 90 0 0 1 210 110" />
+                <path class="gauge__progress" id="powerGaugeFill" d="M 30 110 A 90 90 0 0 1 210 110" />
+              </svg>
+              <div class="gauge__center">
+                <div class="gauge__value"><span id="powerValue">--</span><small>W</small></div>
+                <div class="gauge__label">Daya Aktif</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="hero__foot">
+            <div>
+              <div class="foot-label">Pembaruan terakhir</div>
+              <div id="updatedAgo" class="foot-value">--</div>
+            </div>
+            <div>
+              <div class="foot-label">Status perangkat</div>
+              <div id="deviceStateLabel" class="foot-value">--</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card summary-card">
+          <div class="section-head">
+            <h3>Ringkasan Energi</h3>
+            <span class="chip">Realtime</span>
+          </div>
+          <div class="summary-grid">
+            <div>
+              <span class="label">Energi Tercatat</span>
+              <strong id="energyValue">--</strong>
+              <small>kWh</small>
+            </div>
+            <div>
+              <span class="label">Profil Tarif</span>
+              <strong id="tariffValue">--</strong>
+              <small id="tariffDetail">Tarif bertingkat • R-1/TR</small>
+            </div>
+            <div>
+              <span class="label">Estimasi Biaya Energi</span>
+              <strong id="costValue">--</strong>
+              <small id="costBreakdown">Pemakaian bulan: -- kWh</small>
+              <small id="pzemBaselineWarning" class="warning-text hidden"></small>
+            </div>
+            <div>
+              <span class="label">Biaya Beban Bulanan</span>
+              <strong id="loadCostValue">--</strong>
+              <small>0.45 kVA × Rp11.000/kVA/bulan</small>
+            </div>
+          </div>
+        </section>
+
+        <section class="card metrics-card">
+          <div class="section-head">
+            <h3>Parameter Listrik</h3>
+            <span class="chip">6 parameter</span>
+          </div>
+          <div class="metrics-grid">
+            <article class="metric">
+              <span class="metric__label">Tegangan</span>
+              <strong id="voltageValue">--</strong>
+              <small>V</small>
+            </article>
+            <article class="metric">
+              <span class="metric__label">Arus</span>
+              <strong id="currentValue">--</strong>
+              <small>A</small>
+            </article>
+            <article class="metric">
+              <span class="metric__label">Daya Aktif</span>
+              <strong id="powerValueSmall">--</strong>
+              <small>W</small>
+            </article>
+            <article class="metric">
+              <span class="metric__label">Energi</span>
+              <strong id="energyValueSmall">--</strong>
+              <small>kWh</small>
+            </article>
+            <article class="metric">
+              <span class="metric__label">Frekuensi</span>
+              <strong id="frequencyValue">--</strong>
+              <small>Hz</small>
+            </article>
+            <article class="metric">
+              <span class="metric__label">Power Factor</span>
+              <strong id="pfValue">--</strong>
+              <small>-</small>
+            </article>
+          </div>
+        </section>
+
+        <section class="card chart-card">
+          <div class="section-head">
+            <h3>Grafik Daya</h3>
+            <span class="chip chip--muted">60 titik terakhir</span>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="powerChart"></canvas>
+          </div>
+        </section>
+
+        <section class="card status-card">
+          <div class="section-head">
+            <h3>Status Sistem</h3>
+          </div>
+          <div class="status-list">
+            <div><span>Perangkat</span><strong>ESP32-01</strong></div>
+            <div><span>Sensor</span><strong>PZEM-004T V4.0</strong></div>
+            <div><span>Koneksi</span><strong id="connectionValue">--</strong></div>
+            <div><span>Update Data</span><strong>5 detik</strong></div>
+          </div>
+        </section>
+      </section>
+
+      <section id="monitoringSection" class="page-section hidden">
+        <section class="card monitoring-hero">
+          <div class="section-head section-head--stack">
+            <div>
+              <div class="eyebrow">Monitoring</div>
+              <h2>Monitoring</h2>
+              <p class="subtitle subtitle--compact">Pemantauan parameter listrik secara real-time</p>
+            </div>
+            <div class="badge-row badge-row--wrap">
+              <span class="status-dot status-dot--online" id="monitorStatusDot"></span>
+              <span id="monitorStatusText" class="status-text">Memuat...</span>
+              <span class="hero__chip" id="monitorLastUpdateText">Belum ada pembaruan</span>
+            </div>
+          </div>
+          <div class="monitor-meta">
+            <div><span>Perangkat</span><strong>ESP32-01</strong></div>
+            <div><span>Waktu update terakhir</span><strong id="monitorUpdatedAgo">--</strong></div>
+          </div>
+        </section>
+
+        <section class="card monitoring-power-card">
+          <div class="section-head">
+            <h3>Daya Real-time</h3>
+            <span class="chip">Monitoring</span>
+          </div>
+          <div class="gauge-wrap gauge-wrap--monitoring">
+            <div class="gauge">
+              <svg class="gauge__svg" viewBox="0 0 240 140" aria-hidden="true">
+                <path class="gauge__track" d="M 30 110 A 90 90 0 0 1 210 110" />
+                <path class="gauge__progress" id="monitorPowerGaugeFill" d="M 30 110 A 90 90 0 0 1 210 110" />
+              </svg>
+              <div class="gauge__center">
+                <div class="gauge__value"><span id="monitorPowerValue">--</span><small>W</small></div>
+                <div class="gauge__label">Daya Aktif</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card monitoring-grid-card">
+          <div class="section-head">
+            <h3>Parameter Listrik</h3>
+            <span class="chip">Realtime</span>
+          </div>
+          <div class="metrics-grid metrics-grid--monitoring">
+            <article class="metric">
+              <span class="metric__label">Tegangan</span>
+              <strong id="monitorVoltageValue">--</strong>
+              <small>V</small>
+            </article>
+            <article class="metric">
+              <span class="metric__label">Arus</span>
+              <strong id="monitorCurrentValue">--</strong>
+              <small>A</small>
+            </article>
+            <article class="metric">
+              <span class="metric__label">Daya Aktif</span>
+              <strong id="monitorPowerValueSmall">--</strong>
+              <small>W</small>
+            </article>
+            <article class="metric">
+              <span class="metric__label">Energi Tercatat</span>
+              <strong id="monitorEnergyValue">--</strong>
+              <small>kWh</small>
+            </article>
+            <article class="metric">
+              <span class="metric__label">Frekuensi</span>
+              <strong id="monitorFrequencyValue">--</strong>
+              <small>Hz</small>
+            </article>
+            <article class="metric">
+              <span class="metric__label">Power Factor</span>
+              <strong id="monitorPfValue">--</strong>
+              <small>-</small>
+            </article>
+          </div>
+        </section>
+
+        <section class="card chart-card chart-card--monitoring">
+          <div class="section-head">
+            <h3>Grafik Daya Real-time</h3>
+            <span class="chip chip--muted">Buffer 60 titik</span>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="monitorPowerChart"></canvas>
+          </div>
+        </section>
+      </section>
+
+      <section id="historySection" class="page-section hidden">
+        <section class="card history-hero">
+          <div class="section-head section-head--stack">
+            <div>
+              <div class="eyebrow">Riwayat</div>
+              <h2>Riwayat</h2>
+              <p class="subtitle subtitle--compact">Data historis konsumsi dan parameter listrik</p>
+            </div>
+            <span class="hero__chip">ESP32-01</span>
+          </div>
+          <div class="history-summary" id="historySummary">
+            <div><span>Jumlah Data</span><strong id="historyCount">—</strong></div>
+            <div><span>Rentang Data</span><strong id="historyRange">—</strong></div>
+            <div><span>Daya Rata-rata</span><strong id="historyAvgPower">—</strong></div>
+            <div><span>Energi pada Rentang</span><strong id="historyEnergySpan">—</strong></div>
+          </div>
+          <div class="history-toolbar">
+            <div class="segmented" id="historyRangeFilter">
+              <button type="button" class="segmented__item segmented__item--active" data-range="1h">1 Jam</button>
+              <button type="button" class="segmented__item" data-range="6h">6 Jam</button>
+              <button type="button" class="segmented__item" data-range="24h">24 Jam</button>
+              <button type="button" class="segmented__item" data-range="7d">7 Hari</button>
+            </div>
+            <button id="exportCsvBtn" class="primary-btn history-export" type="button">Ekspor CSV</button>
+          </div>
+          <p id="historyNotice" class="history-notice"></p>
+        </section>
+
+        <section class="card history-chart-card">
+          <div class="section-head">
+            <h3>Riwayat Daya</h3>
+            <span class="chip chip--muted" id="historyChartHint">—</span>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="historyPowerChart"></canvas>
+          </div>
+        </section>
+
+        <section class="card history-table-card">
+          <div class="section-head">
+            <h3>Data Riwayat</h3>
+            <span class="chip chip--muted" id="historyRowHint">0 catatan</span>
+          </div>
+          <div id="historyEmptyState" class="empty-state hidden">Belum ada data riwayat.</div>
+          <div id="historyDesktopTableWrap" class="history-table-wrap">
+            <table class="history-table">
+              <thead>
+                <tr>
+                  <th>Waktu</th><th>Tegangan</th><th>Arus</th><th>Daya</th><th>Energi</th><th>Frekuensi</th><th>PF</th>
+                </tr>
+              </thead>
+              <tbody id="historyTableBody"></tbody>
+            </table>
+          </div>
+          <div id="historyMobileList" class="history-mobile-list"></div>
+        </section>
+      </section>
+
+      <section id="settingsSection" class="page-section hidden">
+        <section class="card settings-hero">
+          <div class="section-head section-head--stack">
+            <div>
+              <div class="eyebrow">Pengaturan</div>
+              <h2>Pengaturan</h2>
+              <p class="subtitle subtitle--compact">Kelola preferensi Smart Energy Monitoring</p>
+            </div>
+            <span class="hero__chip">Konfigurasi Lokal</span>
+          </div>
+        </section>
+
+        <section class="card settings-card">
+          <div class="section-head section-head--stack">
+            <div>
+              <h3>Profil Tarif</h3>
+              <p class="subtitle subtitle--compact">Estimasi biaya memakai profil 450 VA Pascabayar. Biaya adalah nilai turunan dari kWh, bukan target Random Forest.</p>
+            </div>
+          </div>
+          <div class="tariff-profile-box">
+            <strong>450 VA Pascabayar</strong>
+            <span>R-1/TR · Tarif bertingkat</span>
+            <ul>
+              <li>0–30 kWh: Rp169/kWh</li>
+              <li>&gt;30–60 kWh: Rp360/kWh</li>
+              <li>&gt;60 kWh: Rp495/kWh</li>
+              <li>Biaya beban: Rp11.000/kVA/bulan</li>
+            </ul>
+          </div>
+          <label class="field settings-field">
+            <span>Pemakaian sebelum alat mulai merekam (kWh)</span>
+            <input id="usageBeforeMonitoringInput" type="number" min="0" step="0.0001" inputmode="decimal" placeholder="0">
+          </label>
+          <p class="settings-help">Isi jumlah pemakaian bulan berjalan sebelum PZEM mulai merekam. Jika monitoring dimulai sejak awal periode dan PZEM mulai dari 0 kWh, biarkan 0.</p>
+          <div class="settings-actions">
+            <button id="saveUsageBeforeBtn" class="primary-btn" type="button">Simpan Pemakaian Awal</button>
+          </div>
+          <label class="field settings-field settings-field--spaced">
+            <span>PZEM awal saat monitoring instalasi ini (kWh)</span>
+            <input id="pzemEnergyBaselineInput" type="number" min="0" step="0.0001" inputmode="decimal" placeholder="0">
+          </label>
+          <p class="settings-help">Isi nilai cumulative energy_kwh PZEM saat alat mulai digunakan pada instalasi 450 VA. Baseline ini mencegah konsumsi instalasi sebelumnya ikut dihitung.</p>
+          <div class="settings-actions">
+            <button id="useCurrentPzemBtn" class="secondary-btn" type="button">Gunakan Nilai PZEM Saat Ini</button>
+            <button id="savePzemBaselineBtn" class="primary-btn" type="button">Simpan Baseline PZEM</button>
+            <button id="resetPzemBaselineBtn" class="secondary-btn" type="button">Reset Baseline PZEM</button>
+          </div>
+          <p id="settingsMsg" class="message settings-message" role="status" aria-live="polite"></p>
+        </section>
+
+        <section class="card settings-card">
+          <div class="section-head section-head--stack">
+            <div>
+              <h3>Perangkat</h3>
+            </div>
+          </div>
+          <div class="settings-info-grid settings-info-grid--device">
+            <div class="settings-info-item">
+              <div class="settings-info-label">Nama Perangkat</div>
+              <div class="settings-info-value">ESP32-01</div>
+            </div>
+            <div class="settings-info-item">
+              <div class="settings-info-label">Sumber Data</div>
+              <div class="settings-info-value">PZEM-004T</div>
+            </div>
+            <div class="settings-info-item">
+              <div class="settings-info-label">Platform</div>
+              <div class="settings-info-value">ESP32</div>
+            </div>
+            <div class="settings-info-item">
+              <div class="settings-info-label">Database</div>
+              <div class="settings-info-value">Firebase Realtime Database</div>
+            </div>
+            <div class="settings-info-item">
+              <div class="settings-info-label">Status Perangkat</div>
+              <div class="settings-info-value" id="settingsDeviceStatus">--</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card settings-card">
+          <div class="section-head section-head--stack">
+            <div>
+              <h3>Akun</h3>
+            </div>
+          </div>
+          <div class="settings-info-grid settings-info-grid--single">
+            <div class="settings-info-item">
+              <div class="settings-info-label">Email Akun</div>
+              <div class="settings-info-value" id="settingsAccountEmail">--</div>
+            </div>
+          </div>
+          <div class="settings-actions">
+            <button id="settingsLogoutBtn" class="primary-btn" type="button">Keluar</button>
+          </div>
+        </section>
+
+        <section class="card settings-card">
+          <div class="section-head section-head--stack">
+            <div>
+              <h3>Tentang Sistem</h3>
+            </div>
+          </div>
+          <div class="settings-info-grid settings-info-grid--about">
+            <div class="settings-info-item">
+              <div class="settings-info-label">Nama Sistem</div>
+              <div class="settings-info-value">Smart Energy Monitoring</div>
+            </div>
+            <div class="settings-info-item">
+              <div class="settings-info-label">Deskripsi</div>
+              <div class="settings-info-value">Monitoring konsumsi energi listrik berbasis ESP32 dan Internet of Things.</div>
+            </div>
+            <div class="settings-info-item">
+              <div class="settings-info-label">Metode Prediksi</div>
+              <div class="settings-info-value">Random Forest</div>
+            </div>
+            <div class="settings-info-item">
+              <div class="settings-info-label">Perangkat</div>
+              <div class="settings-info-value">ESP32 + PZEM-004T</div>
+            </div>
+            <div class="settings-info-item">
+              <div class="settings-info-label">Backend</div>
+              <div class="settings-info-value">Firebase Realtime Database</div>
+            </div>
+            <div class="settings-info-item">
+              <div class="settings-info-label">Status Model</div>
+              <div class="settings-info-value" id="settingsModelStatus">Belum tersedia</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card settings-card">
+          <div class="section-head section-head--stack">
+            <div>
+              <h3>Reset Preferensi</h3>
+              <p class="subtitle subtitle--compact">Reset pemakaian sebelum monitoring ke 0 tanpa mengubah data Firebase.</p>
+            </div>
+          </div>
+          <div class="settings-actions">
+            <button id="resetTariffBtn" class="secondary-btn" type="button">Reset Pemakaian Awal</button>
+          </div>
+        </section>
+      </section>
+
+      <section id="predictionSection" class="page-section hidden">
+        <section class="card prediction-hero">
+          <div class="section-head section-head--stack">
+            <div>
+              <div class="eyebrow">Prediksi</div>
+              <h2>Prediksi</h2>
+              <p class="subtitle subtitle--compact">Prediksi konsumsi energi menggunakan Random Forest</p>
+            </div>
+            <div class="badge-row badge-row--wrap">
+              <span class="hero__chip">ESP32-01</span>
+              <span class="chip chip--muted" id="predictionModelStatus">Belum tersedia</span>
+            </div>
+          </div>
+          <div class="prediction-hero-panel">
+            <div>
+              <span class="prediction-card__label" id="predictionHeroLabel">Prediksi Konsumsi 1 Jam Berikutnya</span>
+              <h3 id="predictionHeroTitle">Prediksi Belum Tersedia</h3>
+              <p id="predictionHeroSubtext">Model atau hasil prediksi belum tersedia untuk ditampilkan.</p>
+            </div>
+          </div>
+          <div class="prediction-summary-grid">
+            <div class="prediction-card">
+              <span class="prediction-card__label">Prediksi Historis Terakhir</span>
+              <strong id="predictionEnergyNextHour">—</strong>
+            </div>
+            <div class="prediction-card">
+              <span class="prediction-card__label">Feature Timestamp</span>
+              <strong id="predictionFeatureTimestamp">—</strong>
+            </div>
+            <div class="prediction-card">
+              <span class="prediction-card__label">Target Prediksi Historis</span>
+              <strong id="predictionTargetTimestamp">—</strong>
+            </div>
+            <div class="prediction-card">
+              <span class="prediction-card__label">Staleness</span>
+              <strong id="predictionStaleness">—</strong>
+            </div>
+            <div class="prediction-card">
+              <span class="prediction-card__label">Versi Model</span>
+              <strong id="predictionModelVersion">—</strong>
+            </div>
+            <div class="prediction-card">
+              <span class="prediction-card__label">RF dalam Proyeksi Bulan</span>
+              <strong id="predictionRfUsed">—</strong>
+            </div>
+          </div>
+        </section>
+
+        <section class="card prediction-monthly-card">
+          <div class="section-head">
+            <h3>Proyeksi Bulan Berjalan</h3>
+            <span class="chip chip--muted" id="predictionMonthlyStatus">—</span>
+          </div>
+          <div class="prediction-metrics-grid prediction-metrics-grid--monthly">
+            <article class="prediction-card prediction-card--metric"><span class="prediction-card__label">Konsumsi Terobservasi</span><strong id="predictionObservedEnergy">—</strong><small id="predictionObservedCost">—</small></article>
+            <article class="prediction-card prediction-card--metric"><span class="prediction-card__label">Estimasi Sebelum Dataset</span><strong id="predictionPastEstimate">—</strong></article>
+            <article class="prediction-card prediction-card--metric"><span class="prediction-card__label">Estimasi Sisa Bulan</span><strong id="predictionRemainingEstimate">—</strong><small id="predictionRemainingCost">—</small></article>
+            <article class="prediction-card prediction-card--metric prediction-card--total"><span class="prediction-card__label">Proyeksi Total Bulan</span><strong id="predictionMonthlyTotal">—</strong><small id="predictionMonthlyCost">—</small></article>
+          </div>
+          <div class="prediction-coverage-warning hidden" id="predictionCoverageWarning">
+            <strong>Data Tidak Mencakup Awal Bulan</strong>
+            <p>Sebagian konsumsi sebelum periode dataset diestimasi menggunakan rata-rata konsumsi per jam dari data aktual yang tersedia.</p>
+          </div>
+          <p class="prediction-info-text" id="predictionProjectionMethod">—</p>
+          <p class="prediction-warning hidden" id="predictionWarning"></p>
+        </section>
+
+        <section class="card prediction-eval-card">
+          <div class="section-head">
+            <h3>Evaluasi Model</h3>
+            <span class="chip chip--muted" id="predictionEvalHint">Metrik evaluasi belum tersedia.</span>
+          </div>
+          <div class="prediction-eval-table" role="table" aria-label="Evaluasi model Random Forest">
+            <div class="prediction-eval-row prediction-eval-row--head" role="row"><span>Metrik</span><span>Persistence Baseline</span><span>Random Forest</span></div>
+            <div class="prediction-eval-row" role="row"><span>MAE</span><strong id="predictionBaselineMae">—</strong><strong id="predictionMae">—</strong></div>
+            <div class="prediction-eval-row" role="row"><span>RMSE</span><strong id="predictionBaselineRmse">—</strong><strong id="predictionRmse">—</strong></div>
+            <div class="prediction-eval-row" role="row"><span>R²</span><strong id="predictionBaselineR2">—</strong><strong id="predictionR2">—</strong></div>
+          </div>
+          <p class="prediction-info-text" id="predictionMetricNote">—</p>
+        </section>
+
+        <section class="card prediction-info-card">
+          <div class="section-head">
+            <h3>Status Random Forest</h3>
+          </div>
+          <div class="prediction-status-grid">
+            <div><span>Model</span><strong>Random Forest Regression</strong></div>
+            <div><span>Research minimum</span><strong id="predictionResearchMinimum">—</strong></div>
+            <div><span>Prediction freshness</span><strong id="predictionFreshness">—</strong></div>
+            <div><span>Data Quality</span><strong id="predictionDataQuality">—</strong></div>
+          </div>
+        </section>
+
+        <section class="card prediction-empty-state hidden" id="predictionEmptyState">
+          <h3>Prediksi Belum Tersedia</h3>
+          <p>Model atau hasil prediksi belum tersedia untuk ditampilkan.</p>
+          <p class="muted">Nilai kosong ditampilkan sebagai —, bukan 0.</p>
+        </section>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Navigasi utama">
+      <button class="bottom-nav__item bottom-nav__item--active" data-page="dashboard" type="button">Dashboard</button>
+      <button class="bottom-nav__item" data-page="monitoring" type="button">Monitoring</button>
+      <button class="bottom-nav__item" data-page="riwayat" type="button">Riwayat</button>
+      <button class="bottom-nav__item" data-page="prediksi" type="button">Prediksi</button>
+      <button class="bottom-nav__item" data-page="pengaturan" type="button">Pengaturan</button>
+    </nav>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
