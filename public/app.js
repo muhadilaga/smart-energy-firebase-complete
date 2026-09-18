@@ -452,7 +452,7 @@ function setPredictionState(data) {
   els.predictionR2.textContent = fmtPredictionValue(rf.r2, 3);
   const metricsAvailable = [baseline.mae, baseline.rmse, baseline.r2, rf.mae, rf.rmse, rf.r2].some(v => validPredictionValue(v) !== null);
   els.predictionEvalHint.textContent = metricsAvailable ? `${ev.train_rows ?? "—"} train / ${ev.test_rows ?? "—"} test` : "Metrik evaluasi belum tersedia.";
-  els.predictionMetricNote.textContent = "Random Forest memberi MAE dan RMSE lebih rendah dari persistence baseline, namun R² masih negatif sehingga kemampuan menjelaskan variasi konsumsi masih terbatas.";
+  els.predictionMetricNote.textContent = "Pada data pengujian kronologis, Random Forest belum mengungguli persistence baseline. Nilai MAE dan RMSE Random Forest lebih tinggi, sedangkan R² lebih rendah dibandingkan baseline.";
   els.predictionResearchMinimum.textContent = data.research_minimum_met === true ? "Terpenuhi" : data.research_minimum_met === false ? "Belum terpenuhi" : "—";
   els.predictionFreshness.textContent = data.prediction_status || "—";
   els.predictionDataQuality.textContent = `Missing bucket: ${data.missing_hourly_bucket_count ?? "—"}; raw gap event: ${data.raw_reading_gap_event_count ?? "—"}`;

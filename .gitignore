@@ -33,3 +33,6 @@ ml/output/*
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Firebase CLI cache
+.firebase/
