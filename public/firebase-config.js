@@ -9,3 +9,5 @@ export const firebaseConfig = {
 };
 
 export const DEVICE_ID = "esp32-01";
+
+export const PREDICT_API_BASE_URL = "https://smart-energy-firebase-complete-production.up.railway.app";

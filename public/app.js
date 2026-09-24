@@ -1,7 +1,7 @@
 ﻿import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 import { getDatabase, ref, onValue, query, orderByKey, limitToLast } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-database.js";
-import { firebaseConfig, DEVICE_ID } from "./firebase-config.js";
+import { firebaseConfig, DEVICE_ID, PREDICT_API_BASE_URL } from "./firebase-config.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -390,7 +390,7 @@ function getPredictApiUrl() {
   if (host === "localhost" || host === "127.0.0.1") {
     return "http://127.0.0.1:8000/api/predict";
   }
-  return "/api/predict";
+  return PREDICT_API_BASE_URL + "/api/predict";
 }
 function hasPredictionPayload(data) {
   if (!data || typeof data !== "object") return false;

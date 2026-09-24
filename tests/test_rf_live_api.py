@@ -252,6 +252,19 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertNotIn("localhost:8000/api/predict", js)
         self.assertNotRegex(js, r"eyJ[A-Za-z0-9_-]{20,}")
 
+    def test_production_api_url_configured(self):
+        config = (PUBLIC_DIR / "firebase-config.js").read_text(encoding="utf-8")
+        self.assertIn("PREDICT_API_BASE_URL", config)
+        self.assertIn("smart-energy-firebase-complete-production.up.railway.app", config)
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("PREDICT_API_BASE_URL", js)
+        self.assertIn("import", js.split("\n")[3])  # line 4 has the import
+
+    def test_localhost_fallback_preserved(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn('return "http://127.0.0.1:8000/api/predict"', js)
+        self.assertIn('host === "localhost"', js)
+
     def test_no_accuracy_claim(self):
         js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
         html = (PUBLIC_DIR / "index.html").read_text(encoding="utf-8")
