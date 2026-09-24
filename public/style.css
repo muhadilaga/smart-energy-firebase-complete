@@ -155,6 +155,16 @@ h3{font-size:18px;line-height:1.2}
   .history-mobile-kv strong{display:block;text-align:right;white-space:nowrap;font-size:14px;line-height:1.35}
 }
 .prediction-hero,.prediction-monthly-card,.prediction-eval-card,.prediction-info-card{padding:20px}
+.prediction-run-panel{margin:16px 0 0;padding:18px;border-radius:24px;background:var(--surface);box-shadow:inset 5px 5px 10px var(--shadow-lo),inset -5px -5px 10px var(--shadow-hi);display:grid;gap:14px}
+.prediction-run-copy strong{display:block;font-family:var(--font-head);font-size:16px;line-height:1.3}
+.prediction-run-copy p{margin:8px 0 0;color:var(--muted);font-size:13px;line-height:1.55}
+.prediction-run-btn{appearance:none;-webkit-appearance:none;border:0;cursor:pointer;width:100%;min-height:52px;border-radius:18px;background:var(--surface);box-shadow:8px 8px 16px var(--shadow-lo),-8px -8px 16px var(--shadow-hi);color:var(--text);font-weight:800;display:flex;align-items:center;justify-content:center;gap:10px;padding:0 16px}
+.prediction-run-btn:active{box-shadow:inset 4px 4px 8px var(--shadow-lo),inset -4px -4px 8px var(--shadow-hi)}
+.prediction-run-btn:disabled{cursor:not-allowed;opacity:.65;box-shadow:inset 3px 3px 6px var(--shadow-lo),inset -3px -3px 6px var(--shadow-hi)}
+.prediction-run-btn .material-symbols-outlined{font-size:22px;color:var(--green)}
+.prediction-run-status{margin:0;min-height:20px;color:var(--muted);font-size:13px;line-height:1.5;font-weight:700}
+.prediction-run-status--error{color:var(--red)}
+.prediction-run-status--ok{color:var(--green)}
 .prediction-hero-panel{margin:16px 0 18px;padding:20px;border-radius:24px;background:var(--surface);box-shadow:inset 5px 5px 10px var(--shadow-lo),inset -5px -5px 10px var(--shadow-hi)}
 .prediction-hero-panel h3{margin-top:8px;font-size:26px;line-height:1.15}
 .prediction-hero-panel p{margin:8px 0 0;color:var(--muted);font-size:14px;line-height:1.55;max-width:720px}
@@ -179,6 +189,10 @@ h3{font-size:18px;line-height:1.2}
 .prediction-eval-row--head span:first-child{text-align:left}
 .chip--warning{color:#8a5a00}
 @media (min-width:768px){
+  .prediction-run-panel{padding:20px;grid-template-columns:minmax(0,1fr) auto;align-items:center}
+  .prediction-run-copy{grid-column:1 / -1}
+  .prediction-run-btn{width:auto;min-width:280px;padding:0 22px}
+  .prediction-run-status{grid-column:1 / -1}
   .prediction-summary-grid,.prediction-metrics-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .prediction-status-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }

@@ -13,19 +13,21 @@ MAX_PREDICTION_STALENESS_HOURS = 2.0
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import train_random_forest as trf
 
-def generate_prediction():
+class PredictionError(RuntimeError):
+    """Raised when inference cannot be completed. Safe for API callers; CLI maps this to exit 1."""
+
+
+def generate_prediction(data_path=None, output_path=None):
     base_dir = Path(__file__).parent.parent
-    data_path = base_dir / "ml" / "data" / "history_real.csv"
+    data_path = Path(data_path) if data_path is not None else base_dir / "ml" / "data" / "history_real.csv"
     model_path = base_dir / "ml" / "output" / "random_forest_model.joblib"
     metrics_path = base_dir / "ml" / "output" / "metrics.json"
-    output_path = base_dir / "ml" / "output" / "prediction.json"
+    output_path = Path(output_path) if output_path is not None else base_dir / "ml" / "output" / "prediction.json"
     
     if not data_path.exists():
-        print(f"Data file not found: {data_path}")
-        sys.exit(1)
+        raise PredictionError(f"Data file not found: {data_path}")
     if not model_path.exists():
-        print(f"Model file not found: {model_path}")
-        sys.exit(1)
+        raise PredictionError(f"Model file not found: {model_path}")
         
     print("Loading and preprocessing data...")
     df = trf.load_csv(data_path)
@@ -33,8 +35,7 @@ def generate_prediction():
     raw_df, quality = trf.clean_rows(df)
     
     if len(raw_df) < 2:
-        print("Error: Not enough raw rows to perform hourly aggregation.")
-        sys.exit(1)
+        raise PredictionError("Error: Not enough raw rows to perform hourly aggregation.")
         
     hourly = trf.aggregate_hourly(raw_df)
     hourly = trf.build_features(hourly)
@@ -44,8 +45,7 @@ def generate_prediction():
     model_df = model_df[(model_df["coverage_flag"] == False) & (model_df["observed_hour"] == True)].copy()
     
     if len(model_df) == 0:
-        print("Error: No valid rows with complete features found. Lag 24h might not be fulfilled.")
-        sys.exit(1)
+        raise PredictionError("Error: No valid rows with complete features found. Lag 24h might not be fulfilled.")
         
     # Get the latest valid row for prediction
     latest_row = model_df.iloc[-1]
@@ -74,8 +74,7 @@ def generate_prediction():
     valid_month_data = month_data[month_data["observed_hour"] == True]
     
     if valid_month_data.empty:
-        print("Error: No valid observation found in the current month.")
-        sys.exit(1)
+        raise PredictionError("Error: No valid observation found in the current month.")
         
     # Extract exact raw timestamps for precise duration
     obs_start_hour = valid_month_data["hour"].min()
@@ -229,6 +228,11 @@ def generate_prediction():
         json.dump(out, f, indent=2, ensure_ascii=False)
         
     print(f"Prediction generated successfully at {output_path}")
+    return out
 
 if __name__ == "__main__":
-    generate_prediction()
+    try:
+        generate_prediction()
+    except PredictionError as exc:
+        print(str(exc))
+        sys.exit(1)

@@ -517,6 +517,21 @@
               <span class="chip chip--muted" id="predictionModelStatus">Belum tersedia</span>
             </div>
           </div>
+          <div class="prediction-run-panel">
+            <div class="prediction-run-copy">
+              <strong>Perhitungan Random Forest</strong>
+              <p>Ambil riwayat Firebase, jalankan preprocessing yang sama dengan pipeline penelitian, lalu inference model RF-v1. Tombol ini tidak melakukan retraining.</p>
+            </div>
+            <button id="runPredictionBtn" class="prediction-run-btn" type="button">
+              <span class="material-symbols-outlined" aria-hidden="true">calculate</span>
+              <span class="prediction-run-btn__text">Hitung Prediksi Random Forest</span>
+              <span class="btn-spinner hidden" aria-hidden="true"></span>
+            </button>
+            <p id="predictionRunStatus" class="prediction-run-status" aria-live="polite">
+              Siap melakukan perhitungan.
+            </p>
+          </div>
+
           <div class="prediction-hero-panel">
             <div>
               <span class="prediction-card__label" id="predictionHeroLabel">Prediksi Konsumsi 1 Jam Berikutnya</span>
@@ -526,7 +541,7 @@
           </div>
           <div class="prediction-summary-grid">
             <div class="prediction-card">
-              <span class="prediction-card__label">Prediksi Historis Terakhir</span>
+              <span class="prediction-card__label" id="predictionEnergyLabel">Prediksi Historis Terakhir</span>
               <strong id="predictionEnergyNextHour">—</strong>
             </div>
             <div class="prediction-card">
@@ -534,12 +549,21 @@
               <strong id="predictionFeatureTimestamp">—</strong>
             </div>
             <div class="prediction-card">
-              <span class="prediction-card__label">Target Prediksi Historis</span>
+              <span class="prediction-card__label">Target Prediksi</span>
               <strong id="predictionTargetTimestamp">—</strong>
             </div>
             <div class="prediction-card">
-              <span class="prediction-card__label">Staleness</span>
+              <span class="prediction-card__label">Staleness pipeline</span>
               <strong id="predictionStaleness">—</strong>
+              <small>Jarak fitur lengkap vs pembacaan mentah terakhir. Bukan umur terhadap waktu sekarang.</small>
+            </div>
+            <div class="prediction-card">
+              <span class="prediction-card__label">Waktu perhitungan</span>
+              <strong id="predictionGeneratedAt">—</strong>
+            </div>
+            <div class="prediction-card">
+              <span class="prediction-card__label">Umur data sumber</span>
+              <strong id="predictionSourceAge">—</strong>
             </div>
             <div class="prediction-card">
               <span class="prediction-card__label">Versi Model</span>

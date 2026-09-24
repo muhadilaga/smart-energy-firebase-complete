@@ -25,6 +25,7 @@ ml/output/*
 *.log
 *.tmp
 *.temp
+*.bak
 .cache/
 
 # IDE / OS
