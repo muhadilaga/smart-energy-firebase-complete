@@ -1,6 +1,7 @@
 from pathlib import Path
 import json
 import sys
+import tempfile
 
 import joblib
 import requests
@@ -18,8 +19,6 @@ import predict_energy
 
 MODEL_PATH = ML_DIR / "output" / "random_forest_model.joblib"
 METRICS_PATH = ML_DIR / "output" / "metrics.json"
-LIVE_DATA_PATH = ML_DIR / "data" / "history_live.csv"
-LIVE_OUTPUT_PATH = ML_DIR / "output" / "prediction_live.json"
 
 ALLOWED_ORIGINS = [
     "https://energy.muhadilaga.my.id",
@@ -166,43 +165,47 @@ def run_prediction(
         )
 
     try:
-        records = export_firebase_history.fetch_history(
-            token,
-            export_firebase_history.DEFAULT_NODE
-        )
+        with tempfile.TemporaryDirectory() as tmp:
+            live_csv = Path(tmp) / "history_live.csv"
+            live_json = Path(tmp) / "prediction_live.json"
 
-        if not records:
-            raise HTTPException(
-                status_code=422,
-                detail="Firebase history is empty."
+            records = export_firebase_history.fetch_history(
+                token,
+                export_firebase_history.DEFAULT_NODE
             )
 
-        rows, export_stats = export_firebase_history.export_csv(
-            records,
-            LIVE_DATA_PATH
-        )
+            if not records:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Firebase history is empty."
+                )
 
-        if len(rows) < 2:
-            raise HTTPException(
-                status_code=422,
-                detail="Not enough Firebase history for prediction."
+            rows, export_stats = export_firebase_history.export_csv(
+                records,
+                live_csv
             )
 
-        prediction = predict_energy.generate_prediction(
-            data_path=LIVE_DATA_PATH,
-            output_path=LIVE_OUTPUT_PATH
-        )
-        prediction = attach_evaluation(prediction)
+            if len(rows) < 2:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Not enough Firebase history for prediction."
+                )
 
-        return {
-            "status": "ok",
-            "source": "firebase_rtdb",
-            "node": export_firebase_history.DEFAULT_NODE,
-            "live_dataset": LIVE_DATA_PATH.name,
-            "prediction_output": LIVE_OUTPUT_PATH.name,
-            "export": export_stats,
-            "prediction": prediction
-        }
+            prediction = predict_energy.generate_prediction(
+                data_path=live_csv,
+                output_path=live_json
+            )
+            prediction = attach_evaluation(prediction)
+
+            return {
+                "status": "ok",
+                "source": "firebase_rtdb",
+                "node": export_firebase_history.DEFAULT_NODE,
+                "live_dataset": live_csv.name,
+                "prediction_output": live_json.name,
+                "export": export_stats,
+                "prediction": prediction
+            }
 
     except HTTPException:
         raise

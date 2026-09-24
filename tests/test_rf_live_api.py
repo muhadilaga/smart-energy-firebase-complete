@@ -27,6 +27,7 @@ from fastapi.testclient import TestClient
 HISTORY_REAL = ML_DIR / "data" / "history_real.csv"
 HISTORY_LIVE = ML_DIR / "data" / "history_live.csv"
 MODEL_PATH = ML_DIR / "output" / "random_forest_model.joblib"
+ML_DATA_DIR = ML_DIR / "data"
 
 
 def csv_to_records(path: Path, limit: int | None = None) -> dict:
@@ -166,14 +167,9 @@ class ApiTests(unittest.TestCase):
             self.skipTest("history_real.csv missing")
         records = csv_to_records(HISTORY_REAL)
         before = HISTORY_REAL.read_bytes()
-        with tempfile.TemporaryDirectory() as tmp:
-            live_csv = Path(tmp) / "history_live.csv"
-            live_json = Path(tmp) / "prediction_live.json"
-            with patch("main.verify_firebase_id_token", return_value=None) as verify_token, \
-                 patch("export_firebase_history.fetch_history", return_value=records), \
-                 patch("main.LIVE_DATA_PATH", live_csv), \
-                 patch("main.LIVE_OUTPUT_PATH", live_json):
-                response = self.client.post("/api/predict", headers={"Authorization": "Bearer test-token"})
+        with patch("main.verify_firebase_id_token", return_value=None) as verify_token, \
+             patch("export_firebase_history.fetch_history", return_value=records):
+            response = self.client.post("/api/predict", headers={"Authorization": "Bearer test-token"})
         after = HISTORY_REAL.read_bytes()
         self.assertEqual(before, after)
         verify_token.assert_called_once()
@@ -187,6 +183,46 @@ class ApiTests(unittest.TestCase):
         self.assertTrue(prediction["predicted_next_hour_kwh"] >= 0)
         self.assertIn("evaluation", prediction)
         self.assertNotIn("test-token", json.dumps(body))
+
+    def test_predict_uses_tempdir_not_shared_files(self):
+        if not HISTORY_REAL.exists():
+            self.skipTest("history_real.csv missing")
+        records = csv_to_records(HISTORY_REAL)
+        shared_csv = ML_DATA_DIR / "history_live.csv"
+        shared_json = (ML_DIR / "output") / "prediction_live.json"
+        csv_mtime_before = shared_csv.stat().st_mtime if shared_csv.exists() else None
+        json_mtime_before = shared_json.stat().st_mtime if shared_json.exists() else None
+        with patch("main.verify_firebase_id_token", return_value=None), \
+             patch("export_firebase_history.fetch_history", return_value=records):
+            self.client.post("/api/predict", headers={"Authorization": "Bearer x"})
+        if shared_csv.exists():
+            self.assertEqual(shared_csv.stat().st_mtime, csv_mtime_before,
+                             "endpoint must not modify shared history_live.csv")
+        if shared_json.exists():
+            self.assertEqual(shared_json.stat().st_mtime, json_mtime_before,
+                             "endpoint must not modify shared prediction_live.json")
+
+    def test_two_separate_requests_use_different_tempdirs(self):
+        if not HISTORY_REAL.exists():
+            self.skipTest("history_real.csv missing")
+        records = csv_to_records(HISTORY_REAL)
+        tempdirs = []
+        original_td = __import__("tempfile").TemporaryDirectory
+
+        class CaptureTD(original_td):
+            def __init__(self, *a, **kw):
+                super().__init__(*a, **kw)
+                tempdirs.append(self.name)
+
+        with patch("main.verify_firebase_id_token", return_value=None), \
+             patch("export_firebase_history.fetch_history", return_value=records), \
+             patch("tempfile.TemporaryDirectory", CaptureTD):
+            r1 = self.client.post("/api/predict", headers={"Authorization": "Bearer a"})
+            r2 = self.client.post("/api/predict", headers={"Authorization": "Bearer b"})
+        self.assertEqual(r1.status_code, 200)
+        self.assertEqual(r2.status_code, 200)
+        self.assertEqual(len(tempdirs), 2)
+        self.assertNotEqual(tempdirs[0], tempdirs[1])
 
 
 class FrontendStaticTests(unittest.TestCase):
