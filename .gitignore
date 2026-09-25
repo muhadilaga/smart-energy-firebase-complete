@@ -20,6 +20,7 @@ ml/data/*.csv
 # ML generated artifacts
 ml/output/*
 !ml/output/.gitkeep
+!ml/output/random_forest_model.joblib
 
 # Logs / temporary files
 *.log
