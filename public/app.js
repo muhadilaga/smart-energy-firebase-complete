@@ -43,6 +43,8 @@ const els = {
   pzemBaselineWarning: document.getElementById("pzemBaselineWarning"),
   loadCostValue: document.getElementById("loadCostValue"),
   costValue: document.getElementById("costValue"),
+  totalCostValue: document.getElementById("totalCostValue"),
+  monitoringNote: document.getElementById("monitoringNote"),
   powerChart: document.getElementById("powerChart"),
   monitorStatusDot: document.getElementById("monitorStatusDot"),
   monitorStatusText: document.getElementById("monitorStatusText"),
@@ -224,6 +226,63 @@ function calculate450PostpaidEnergyCost(kwh) {
     if (remaining <= 0) break;
   }
   return cost;
+}
+
+// --- Monthly PZEM usage tracking ---
+// Tracks counter kumulatif PZEM per month, handles resets and month transitions.
+// State stored in localStorage under "monthlyUsageState" as JSON.
+const MONTHLY_STATE_KEY = "monthlyUsageState";
+const PZEM_RESET_THRESHOLD_KWH = 0.5;
+
+function getMonthlyUsageState() {
+  try { return JSON.parse(localStorage.getItem(MONTHLY_STATE_KEY)); } catch { return null; }
+}
+function saveMonthlyUsageState(state) {
+  localStorage.setItem(MONTHLY_STATE_KEY, JSON.stringify(state));
+}
+function monthKeyFromTimestamp(ts) {
+  if (!Number.isFinite(ts)) return null;
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+function migrateLegacyPzemKeys() {
+  if (getMonthlyUsageState()) return;
+  const raw = localStorage.getItem("pzemEnergyBaseline");
+  if (raw === null || raw === "") return;
+  const val = Number(raw);
+  if (!Number.isFinite(val) || val < 0) return;
+  saveMonthlyUsageState({
+    month: null, baseline_kwh: val, accumulated_before_reset: 0,
+    baseline_set_at: Date.now(), last_observed_kwh: val,
+  });
+}
+function updateMonthlyUsageState(currentEnergy, dataTimestamp) {
+  const currentMonth = monthKeyFromTimestamp(dataTimestamp);
+  let state = getMonthlyUsageState();
+  if (!state || (currentMonth && state.month !== currentMonth)) {
+    state = {
+      month: currentMonth, baseline_kwh: currentEnergy,
+      accumulated_before_reset: 0, baseline_set_at: dataTimestamp || Date.now(),
+      last_observed_kwh: currentEnergy,
+    };
+    saveMonthlyUsageState(state);
+    return { monitored: 0, reset: false, state };
+  }
+  let { baseline_kwh, accumulated_before_reset, last_observed_kwh } = state;
+  let reset = false;
+  if (currentEnergy < baseline_kwh - PZEM_RESET_THRESHOLD_KWH) {
+    accumulated_before_reset += Math.max(0, last_observed_kwh - baseline_kwh);
+    baseline_kwh = currentEnergy;
+    reset = true;
+  }
+  state.baseline_kwh = baseline_kwh;
+  state.accumulated_before_reset = accumulated_before_reset;
+  state.last_observed_kwh = Math.max(currentEnergy, last_observed_kwh || 0);
+  saveMonthlyUsageState(state);
+  return {
+    monitored: accumulated_before_reset + Math.max(0, currentEnergy - baseline_kwh),
+    reset, state,
+  };
 }
 
 function getUsageBeforeMonitoring() {
@@ -696,7 +755,8 @@ function syncSettingsUI() {
     els.usageBeforeMonitoringInput.value = val > 0 ? String(val) : "";
   }
   if (els.pzemEnergyBaselineInput) {
-    const baseline = getPzemEnergyBaseline();
+    const ms = getMonthlyUsageState();
+    const baseline = ms ? ms.baseline_kwh : getPzemEnergyBaseline();
     els.pzemEnergyBaselineInput.value = baseline > 0 ? String(baseline) : "";
   }
   if (els.settingsAccountEmail) els.settingsAccountEmail.textContent = auth.currentUser?.email || "--";
@@ -732,6 +792,14 @@ function savePzemBaseline() {
       return;
     }
     localStorage.setItem("pzemEnergyBaseline", String(val));
+    const current = getMonthlyUsageState() || {};
+    saveMonthlyUsageState({
+      ...current,
+      baseline_kwh: val,
+      accumulated_before_reset: 0,
+      baseline_set_at: Date.now(),
+      last_observed_kwh: val,
+    });
     els.settingsMsg.textContent = "Baseline PZEM berhasil disimpan.";
   }
   refreshLocalDerivedViews();
@@ -747,6 +815,7 @@ function useCurrentPzemEnergy() {
 }
 function resetPzemBaseline() {
   localStorage.removeItem("pzemEnergyBaseline");
+  localStorage.removeItem(MONTHLY_STATE_KEY);
   if (els.pzemEnergyBaselineInput) els.pzemEnergyBaselineInput.value = "";
   if (els.settingsMsg) els.settingsMsg.textContent = "Baseline PZEM berhasil direset.";
   refreshLocalDerivedViews();
@@ -758,6 +827,7 @@ function saveTariff() {
 function resetTariff() {
   if (!window.confirm("Reset pemakaian sebelum monitoring?")) return;
   localStorage.removeItem("electricUsageBeforeMonitoring");
+  localStorage.removeItem(MONTHLY_STATE_KEY);
   if (els.usageBeforeMonitoringInput) els.usageBeforeMonitoringInput.value = "";
   if (els.settingsMsg) els.settingsMsg.textContent = "Pemakaian sebelum monitoring berhasil direset.";
   refreshLocalDerivedViews();
@@ -779,27 +849,47 @@ function renderState(data) {
   els.lastUpdateText.textContent = t.timeLabel;
   els.updatedAgo.textContent = t.agoLabel;
   const usageBefore = getUsageBeforeMonitoring();
-  const pzemBaseline = getPzemEnergyBaseline();
-  const monitored = calculateMonitoredEnergy(t.energy, pzemBaseline);
-  const monitoredEnergy = monitored.monitored ?? 0;
+  const monthly = Number.isFinite(t.energy)
+    ? updateMonthlyUsageState(t.energy, t.ts)
+    : { monitored: 0, reset: false, state: getMonthlyUsageState() };
+  const monitoredEnergy = monthly.monitored;
   const monthlyUsage = usageBefore + monitoredEnergy;
   const biayaBeban = TARIFF_PROFILE.daya_kva * TARIFF_PROFILE.biaya_beban_per_kva;
   const energyCost = calculate450PostpaidEnergyCost(monthlyUsage);
+  const totalCost = energyCost + biayaBeban;
   els.tariffValue.textContent = TARIFF_PROFILE.name;
-  if (els.tariffDetail) els.tariffDetail.textContent = `Tarif bertingkat â€¢ ${TARIFF_PROFILE.code}`;
+  if (els.tariffDetail) els.tariffDetail.textContent = `Tarif bertingkat \u2022 ${TARIFF_PROFILE.code}`;
   els.costValue.textContent = Number.isFinite(t.energy) ? fmtMoney(energyCost) : "--";
+  if (els.totalCostValue) els.totalCostValue.textContent = Number.isFinite(t.energy) ? fmtMoney(totalCost) : "--";
   if (els.costBreakdown) {
-    let breakdown = `Pemakaian bulan: ${monthlyUsage.toFixed(4)} kWh`;
-    if (pzemBaseline > 0 && Number.isFinite(t.energy)) breakdown += `\nPZEM kumulatif: ${t.energy.toFixed(4)} kWh Â· Baseline PZEM: ${pzemBaseline.toFixed(4)} kWh\nTercatat instalasi ini: ${monitoredEnergy.toFixed(4)} kWh`;
-    else if (Number.isFinite(t.energy)) breakdown += `\nTercatat PZEM: ${t.energy.toFixed(4)} kWh`;
+    let breakdown = `Konsumsi bulan berjalan: ${monthlyUsage.toFixed(4)} kWh`;
+    if (Number.isFinite(t.energy)) {
+      const ms = monthly.state;
+      if (ms && ms.baseline_kwh > 0) {
+        breakdown += `\nPZEM kumulatif: ${t.energy.toFixed(4)} kWh \u00b7 Baseline: ${ms.baseline_kwh.toFixed(4)} kWh`;
+        breakdown += `\nTerukur dari PZEM: ${monitoredEnergy.toFixed(4)} kWh`;
+      } else {
+        breakdown += `\nPZEM kumulatif: ${t.energy.toFixed(4)} kWh`;
+      }
+    }
     if (usageBefore > 0) breakdown += `\nSebelum monitoring: ${usageBefore.toFixed(4)} kWh`;
     els.costBreakdown.textContent = breakdown;
   }
   if (els.pzemBaselineWarning) {
-    els.pzemBaselineWarning.textContent = monitored.reset ? "Nilai energi PZEM saat ini lebih kecil dari baseline. Kemungkinan meter PZEM telah di-reset. Periksa baseline di Pengaturan." : "";
-    els.pzemBaselineWarning.classList.toggle("hidden", !monitored.reset);
+    els.pzemBaselineWarning.textContent = monthly.reset
+      ? "Counter PZEM turun (kemungkinan reset). Konsumsi sebelum reset tetap diakumulasi."
+      : "";
+    els.pzemBaselineWarning.classList.toggle("hidden", !monthly.reset);
   }
   if (els.loadCostValue) els.loadCostValue.textContent = fmtMoney(biayaBeban);
+  if (els.monitoringNote) {
+    const ms = monthly.state;
+    if (ms && ms.baseline_set_at && Number.isFinite(ms.baseline_set_at)) {
+      els.monitoringNote.textContent = `Perhitungan konsumsi berdasarkan selisih counter PZEM. Baseline dimulai ${new Date(ms.baseline_set_at).toLocaleString("id-ID")}.`;
+    } else {
+      els.monitoringNote.textContent = "Perhitungan konsumsi berdasarkan selisih counter PZEM selama periode monitoring bulan berjalan.";
+    }
+  }
   setDeviceState(t.isOnline);
   setPowerGauge(els.powerGaugeFill, Number.isFinite(t.power) ? Math.max(0, Math.min(100, (t.power / 2500) * 100)) : 0);
 
@@ -858,6 +948,7 @@ onAuthStateChanged(auth, (user) => {
   if (user) {
     els.loginView.classList.add("hidden");
     els.appView.classList.remove("hidden");
+    migrateLegacyPzemKeys();
     initGauge();
     initMonitorGauge();
     attachRealtime();

@@ -140,7 +140,7 @@
             <div>
               <span class="label">Estimasi Biaya Energi</span>
               <strong id="costValue">--</strong>
-              <small id="costBreakdown">Pemakaian bulan: -- kWh</small>
+              <small id="costBreakdown">Konsumsi bulan berjalan: -- kWh</small>
               <small id="pzemBaselineWarning" class="warning-text hidden"></small>
             </div>
             <div>
@@ -148,7 +148,13 @@
               <strong id="loadCostValue">--</strong>
               <small>0.45 kVA × Rp11.000/kVA/bulan</small>
             </div>
+            <div>
+              <span class="label">Estimasi Total Biaya</span>
+              <strong id="totalCostValue">--</strong>
+              <small>Energi + Beban</small>
+            </div>
           </div>
+          <p id="monitoringNote" class="settings-help" style="margin-top:0.5rem">Perhitungan konsumsi berdasarkan selisih counter PZEM selama periode monitoring bulan berjalan.</p>
         </section>
 
         <section class="card metrics-card">
