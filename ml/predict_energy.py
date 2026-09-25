@@ -152,7 +152,7 @@ def generate_prediction(data_path=None, output_path=None):
     status = "preliminary"
     monthly_projection_status = "preliminary"
     warnings_list = []
-    model_version = "unknown"
+    model_version = "RF-v1"
     research_minimum_met = False
     
     if not coverage_from_month_start:
