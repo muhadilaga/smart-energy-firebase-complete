@@ -1,4 +1,4 @@
-﻿import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 import { getDatabase, ref, onValue, query, orderByKey, limitToLast } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-database.js";
 import { firebaseConfig, DEVICE_ID, PREDICT_API_BASE_URL } from "./firebase-config.js";
@@ -206,8 +206,8 @@ const TARIFF_PROFILE = {
   daya_kva: 0.45,
   biaya_beban_per_kva: 11000, // Rp/kVA/bulan
   blocks: [
-    { limit: 30, rate: 169 },   // 0â€“30 kWh
-    { limit: 60, rate: 360 },   // >30â€“60 kWh
+    { limit: 30, rate: 169 },   // 0–30 kWh
+    { limit: 60, rate: 360 },   // >30–60 kWh
     { limit: Infinity, rate: 495 }, // >60 kWh
   ],
 };
@@ -326,17 +326,17 @@ function fmtMoney(value) {
 
 function tieredCostLabel(kwh) {
   const energy = Number(kwh);
-  if (!Number.isFinite(energy) || energy <= 0) return "â€”";
+  if (!Number.isFinite(energy) || energy <= 0) return "—";
   return fmtMoney(calculate450PostpaidEnergyCost(energy));
 }
 
 function marginalCostLabel(currentUsageKwh, additionalKwh) {
   const cur = Number(currentUsageKwh);
   const add = Number(additionalKwh);
-  if (!Number.isFinite(cur) || !Number.isFinite(add)) return "â€”";
+  if (!Number.isFinite(cur) || !Number.isFinite(add)) return "—";
   const total = Math.max(0, cur) + Math.max(0, add);
   const diff = calculate450PostpaidEnergyCost(total) - calculate450PostpaidEnergyCost(Math.max(0, cur));
-  return diff >= 0 ? fmtMoney(diff) : "â€”";
+  return diff >= 0 ? fmtMoney(diff) : "—";
 }
 
 
@@ -408,21 +408,21 @@ function setPowerGauge(path, percent) {
 
 const HISTORY_MS = { "1h": 3600000, "6h": 21600000, "24h": 86400000, "7d": 604800000 };
 function toFiniteNumber(value) { const n = Number(value); return Number.isFinite(n) ? n : null; }
-function historyTimeFormat(ms, withSeconds = false) { if (!Number.isFinite(ms)) return "â€”"; return new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", second: withSeconds ? "2-digit" : undefined }).format(new Date(ms)); }
-function historyDatePart(ms) { if (!Number.isFinite(ms)) return "â€”"; return new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric" }).format(new Date(ms)); }
-function historyTimePart(ms) { if (!Number.isFinite(ms)) return "â€”"; return new Intl.DateTimeFormat("id-ID", { hour: "2-digit", minute: "2-digit" }).format(new Date(ms)); }
+function historyTimeFormat(ms, withSeconds = false) { if (!Number.isFinite(ms)) return "—"; return new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", second: withSeconds ? "2-digit" : undefined }).format(new Date(ms)); }
+function historyDatePart(ms) { if (!Number.isFinite(ms)) return "—"; return new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric" }).format(new Date(ms)); }
+function historyTimePart(ms) { if (!Number.isFinite(ms)) return "—"; return new Intl.DateTimeFormat("id-ID", { hour: "2-digit", minute: "2-digit" }).format(new Date(ms)); }
 function parseHistorySnapshot(snap) { const out=[]; snap.forEach(child => { const val = child.val() || {}; const ts = toFiniteNumber(val.timestamp) ?? toFiniteNumber(child.key); if (!Number.isFinite(ts)) return; out.push({ key: child.key, timestamp: ts, voltage: toFiniteNumber(val.voltage), current: toFiniteNumber(val.current), power: toFiniteNumber(val.power), energy_kwh: toFiniteNumber(val.energy_kwh), frequency: toFiniteNumber(val.frequency), power_factor: toFiniteNumber(val.power_factor) }); }); out.sort((a,b)=>b.timestamp-a.timestamp); return out; }
 function historyFilterLabel(key) { return key === "1h" ? "1 Jam" : key === "6h" ? "6 Jam" : key === "24h" ? "24 Jam" : "7 Hari"; }
 function filterHistoryRecords(records, filterKey) { if (!records.length) return []; const latest = Math.max(...records.map(r=>r.timestamp).filter(Number.isFinite)); if (!Number.isFinite(latest)) return []; const cutoff = latest - (HISTORY_MS[filterKey] ?? HISTORY_MS["1h"]); return records.filter(r => r.timestamp >= cutoff); }
-function renderHistory() { const all = historyState.all; if (!all.length) { historyState.filtered=[]; els.historyCount.textContent="â€”"; els.historyRange.textContent="â€”"; els.historyAvgPower.textContent="â€”"; els.historyEnergySpan.textContent="â€”"; els.historyRowHint.textContent="0 catatan"; els.historyNotice.textContent="Belum ada data riwayat."; els.historyEmptyState.classList.remove("hidden"); els.historyTableBody.innerHTML=""; els.historyMobileList.innerHTML=""; if (historyState.chart) { historyState.chart.data.labels=[]; historyState.chart.data.datasets[0].data=[]; historyState.chart.update(); } return; }
-  const filtered = filterHistoryRecords(all, historyState.filter); historyState.filtered = filtered; const latest = all[0]; const oldest = all[all.length-1]; const coverage = latest.timestamp - oldest.timestamp; const requested = HISTORY_MS[historyState.filter] ?? HISTORY_MS["1h"]; const avgVals = filtered.map(r=>r.power).filter(v=>Number.isFinite(v)); const avgPower = avgVals.length ? avgVals.reduce((a,b)=>a+b,0)/avgVals.length : null; const firstEnergy = filtered.at(-1)?.energy_kwh; const lastEnergy = filtered[0]?.energy_kwh; const energySpan = Number.isFinite(firstEnergy) && Number.isFinite(lastEnergy) && lastEnergy >= firstEnergy ? lastEnergy - firstEnergy : null; const firstTs = filtered.at(-1)?.timestamp; const lastTs = filtered[0]?.timestamp; const sameDay = Number.isFinite(firstTs) && Number.isFinite(lastTs) && historyDatePart(firstTs) === historyDatePart(lastTs); els.historyCount.textContent = `${filtered.length} catatan`; els.historyRange.innerHTML = sameDay ? `${historyDatePart(firstTs)}<br><span>${historyTimePart(firstTs)} â€“ ${historyTimePart(lastTs)}</span>` : `${historyTimeFormat(firstTs)} â€“ ${historyTimeFormat(lastTs)}`; els.historyAvgPower.textContent = avgPower == null ? "â€”" : `${avgPower.toFixed(1)} W`; els.historyEnergySpan.textContent = energySpan == null ? "â€”" : `${energySpan.toFixed(4)} kWh`; els.historyRowHint.textContent = `${filtered.length} catatan`; els.historyNotice.textContent = coverage < requested ? `Data yang tersedia belum mencakup seluruh rentang ${historyFilterLabel(historyState.filter)}.` : `Menampilkan data ${historyFilterLabel(historyState.filter)}.`; els.historyChartHint.textContent = historyFilterLabel(historyState.filter); els.historyEmptyState.classList.toggle("hidden", filtered.length > 0); const rows = filtered.map(r => `<tr><td>${historyTimeFormat(r.timestamp)}</td><td>${r.voltage == null ? "â€”" : `${r.voltage.toFixed(1)} V`}</td><td>${r.current == null ? "â€”" : `${r.current.toFixed(3)} A`}</td><td>${r.power == null ? "â€”" : `${r.power.toFixed(1)} W`}</td><td>${r.energy_kwh == null ? "â€”" : `${r.energy_kwh.toFixed(4)} kWh`}</td><td>${r.frequency == null ? "â€”" : `${r.frequency.toFixed(1)} Hz`}</td><td>${r.power_factor == null ? "â€”" : r.power_factor.toFixed(2)}</td></tr>`).join(""); els.historyTableBody.innerHTML = rows; els.historyMobileList.innerHTML = filtered.map(r => `<article class="history-mobile-item"><div class="history-mobile-item__time">${historyTimeFormat(r.timestamp)}</div><div class="history-mobile-kv"><span>Daya</span><strong>${r.power == null ? "â€”" : `${r.power.toFixed(1)} W`}</strong><span>Tegangan</span><strong>${r.voltage == null ? "â€”" : `${r.voltage.toFixed(1)} V`}</strong><span>Arus</span><strong>${r.current == null ? "â€”" : `${r.current.toFixed(3)} A`}</strong><span>Energi</span><strong>${r.energy_kwh == null ? "â€”" : `${r.energy_kwh.toFixed(4)} kWh`}</strong><span>Frekuensi</span><strong>${r.frequency == null ? "â€”" : `${r.frequency.toFixed(1)} Hz`}</strong><span>Power Factor</span><strong>${r.power_factor == null ? "â€”" : r.power_factor.toFixed(2)}</strong></div></article>`).join(""); const chartData = filtered.slice().reverse().map(r=>({label:new Date(r.timestamp).toLocaleTimeString("id-ID", {hour:"2-digit", minute:"2-digit"}), value:r.power})); if (!historyState.chart) { historyState.chart = new Chart(els.historyPowerChart, { type:"line", data:{ labels: chartData.map(x=>x.label), datasets:[{ label:"Daya (W)", data: chartData.map(x=>x.value), borderColor:"#006b55", backgroundColor:"rgba(0,107,85,.12)", tension:0.35, fill:true, pointRadius:0, borderWidth:2 }]}, options:{ responsive:true, maintainAspectRatio:false, animation:false, plugins:{ legend:{display:false} }, scales:{ x:{ grid:{display:false}, ticks:{maxRotation:0, autoSkip:true} }, y:{ beginAtZero:true } } } }); } else { historyState.chart.data.labels = chartData.map(x=>x.label); historyState.chart.data.datasets[0].data = chartData.map(x=>x.value); historyState.chart.update(); } }
+function renderHistory() { const all = historyState.all; if (!all.length) { historyState.filtered=[]; els.historyCount.textContent="—"; els.historyRange.textContent="—"; els.historyAvgPower.textContent="—"; els.historyEnergySpan.textContent="—"; els.historyRowHint.textContent="0 catatan"; els.historyNotice.textContent="Belum ada data riwayat."; els.historyEmptyState.classList.remove("hidden"); els.historyTableBody.innerHTML=""; els.historyMobileList.innerHTML=""; if (historyState.chart) { historyState.chart.data.labels=[]; historyState.chart.data.datasets[0].data=[]; historyState.chart.update(); } return; }
+  const filtered = filterHistoryRecords(all, historyState.filter); historyState.filtered = filtered; const latest = all[0]; const oldest = all[all.length-1]; const coverage = latest.timestamp - oldest.timestamp; const requested = HISTORY_MS[historyState.filter] ?? HISTORY_MS["1h"]; const avgVals = filtered.map(r=>r.power).filter(v=>Number.isFinite(v)); const avgPower = avgVals.length ? avgVals.reduce((a,b)=>a+b,0)/avgVals.length : null; const firstEnergy = filtered.at(-1)?.energy_kwh; const lastEnergy = filtered[0]?.energy_kwh; const energySpan = Number.isFinite(firstEnergy) && Number.isFinite(lastEnergy) && lastEnergy >= firstEnergy ? lastEnergy - firstEnergy : null; const firstTs = filtered.at(-1)?.timestamp; const lastTs = filtered[0]?.timestamp; const sameDay = Number.isFinite(firstTs) && Number.isFinite(lastTs) && historyDatePart(firstTs) === historyDatePart(lastTs); els.historyCount.textContent = `${filtered.length} catatan`; els.historyRange.innerHTML = sameDay ? `${historyDatePart(firstTs)}<br><span>${historyTimePart(firstTs)} – ${historyTimePart(lastTs)}</span>` : `${historyTimeFormat(firstTs)} – ${historyTimeFormat(lastTs)}`; els.historyAvgPower.textContent = avgPower == null ? "—" : `${avgPower.toFixed(1)} W`; els.historyEnergySpan.textContent = energySpan == null ? "—" : `${energySpan.toFixed(4)} kWh`; els.historyRowHint.textContent = `${filtered.length} catatan`; els.historyNotice.textContent = coverage < requested ? `Data yang tersedia belum mencakup seluruh rentang ${historyFilterLabel(historyState.filter)}.` : `Menampilkan data ${historyFilterLabel(historyState.filter)}.`; els.historyChartHint.textContent = historyFilterLabel(historyState.filter); els.historyEmptyState.classList.toggle("hidden", filtered.length > 0); const rows = filtered.map(r => `<tr><td>${historyTimeFormat(r.timestamp)}</td><td>${r.voltage == null ? "—" : `${r.voltage.toFixed(1)} V`}</td><td>${r.current == null ? "—" : `${r.current.toFixed(3)} A`}</td><td>${r.power == null ? "—" : `${r.power.toFixed(1)} W`}</td><td>${r.energy_kwh == null ? "—" : `${r.energy_kwh.toFixed(4)} kWh`}</td><td>${r.frequency == null ? "—" : `${r.frequency.toFixed(1)} Hz`}</td><td>${r.power_factor == null ? "—" : r.power_factor.toFixed(2)}</td></tr>`).join(""); els.historyTableBody.innerHTML = rows; els.historyMobileList.innerHTML = filtered.map(r => `<article class="history-mobile-item"><div class="history-mobile-item__time">${historyTimeFormat(r.timestamp)}</div><div class="history-mobile-kv"><span>Daya</span><strong>${r.power == null ? "—" : `${r.power.toFixed(1)} W`}</strong><span>Tegangan</span><strong>${r.voltage == null ? "—" : `${r.voltage.toFixed(1)} V`}</strong><span>Arus</span><strong>${r.current == null ? "—" : `${r.current.toFixed(3)} A`}</strong><span>Energi</span><strong>${r.energy_kwh == null ? "—" : `${r.energy_kwh.toFixed(4)} kWh`}</strong><span>Frekuensi</span><strong>${r.frequency == null ? "—" : `${r.frequency.toFixed(1)} Hz`}</strong><span>Power Factor</span><strong>${r.power_factor == null ? "—" : r.power_factor.toFixed(2)}</strong></div></article>`).join(""); const chartData = filtered.slice().reverse().map(r=>({label:new Date(r.timestamp).toLocaleTimeString("id-ID", {hour:"2-digit", minute:"2-digit"}), value:r.power})); if (!historyState.chart) { historyState.chart = new Chart(els.historyPowerChart, { type:"line", data:{ labels: chartData.map(x=>x.label), datasets:[{ label:"Daya (W)", data: chartData.map(x=>x.value), borderColor:"#006b55", backgroundColor:"rgba(0,107,85,.12)", tension:0.35, fill:true, pointRadius:0, borderWidth:2 }]}, options:{ responsive:true, maintainAspectRatio:false, animation:false, plugins:{ legend:{display:false} }, scales:{ x:{ grid:{display:false}, ticks:{maxRotation:0, autoSkip:true} }, y:{ beginAtZero:true } } } }); } else { historyState.chart.data.labels = chartData.map(x=>x.label); historyState.chart.data.datasets[0].data = chartData.map(x=>x.value); historyState.chart.update(); } }
 function loadHistory() { if (historyState.unsubscribe) return; const historyRef = query(ref(db, `readings/${DEVICE_ID}`), orderByKey(), limitToLast(500)); historyState.unsubscribe = onValue(historyRef, snap => { historyState.all = parseHistorySnapshot(snap); historyState.loaded = true; renderHistory(); }, () => { els.historyNotice.textContent = "Gagal mengambil data riwayat."; }); }
 function exportHistoryCsv() { const data = historyState.filtered.length ? historyState.filtered : []; if (!data.length) return; const rows = ["timestamp,datetime,voltage,current,power,energy_kwh,frequency,power_factor"]; for (const r of data.slice().reverse()) rows.push([r.timestamp, `"${historyTimeFormat(r.timestamp, true)}"`, r.voltage ?? "", r.current ?? "", r.power ?? "", r.energy_kwh ?? "", r.frequency ?? "", r.power_factor ?? ""].join(",")); const blob = new Blob([rows.join("\n")], { type:"text/csv;charset=utf-8;" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `smart-energy-history-${new Date().toISOString().slice(0,10)}.csv`; a.click(); URL.revokeObjectURL(url); }
 
 function validPredictionValue(value) { if (value === null || value === undefined || value === "") return null; const n = Number(value); return Number.isFinite(n) ? n : null; }
-function fmtPredictionValue(value, digits, suffix = "") { const n = validPredictionValue(value); if (n === null) return "â€”"; return `${n.toFixed(digits)}${suffix}`; }
-function fmtBool(value) { return value === true ? "Ya" : value === false ? "Tidak" : "â€”"; }
-function fmtIso(value) { if (!value) return "â€”"; const d = new Date(value); if (Number.isNaN(d.getTime())) return String(value); return new Intl.DateTimeFormat("id-ID", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" }).format(d); }
+function fmtPredictionValue(value, digits, suffix = "") { const n = validPredictionValue(value); if (n === null) return "—"; return `${n.toFixed(digits)}${suffix}`; }
+function fmtBool(value) { return value === true ? "Ya" : value === false ? "Tidak" : "—"; }
+function fmtIso(value) { if (!value) return "—"; const d = new Date(value); if (Number.isNaN(d.getTime())) return String(value); return new Intl.DateTimeFormat("id-ID", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" }).format(d); }
 function hoursFromNow(iso) {
   if (!iso) return null;
   const d = new Date(iso);
@@ -430,7 +430,7 @@ function hoursFromNow(iso) {
   return (Date.now() - d.getTime()) / 3_600_000;
 }
 function fmtClockAge(hours) {
-  if (!Number.isFinite(hours)) return "â€”";
+  if (!Number.isFinite(hours)) return "—";
   if (hours < 0) return "sumber lebih baru dari jam perangkat";
   if (hours < 1) return `${Math.max(1, Math.round(hours * 60))} menit terhadap waktu sekarang`;
   if (hours < 48) return `${hours.toFixed(1)} jam terhadap waktu sekarang`;
@@ -461,37 +461,37 @@ function resetPredictionUi() {
   els.predictionHeroLabel.textContent = "Prediksi";
   els.predictionHeroTitle.textContent = "Prediksi Belum Tersedia";
   els.predictionHeroSubtext.textContent = "Model atau hasil prediksi belum tersedia untuk ditampilkan.";
-  els.predictionEnergyNextHour.textContent = "â€”";
-  els.predictionTargetTimestamp.textContent = "â€”";
-  els.predictionFeatureTimestamp.textContent = "â€”";
-  els.predictionStaleness.textContent = "â€”";
-  els.predictionModelVersion.textContent = "â€”";
-  els.predictionRfUsed.textContent = "â€”";
-  els.predictionMonthlyStatus.textContent = "â€”";
-  els.predictionObservedEnergy.textContent = "â€”";
-  els.predictionObservedCost.textContent = "â€”";
-  els.predictionPastEstimate.textContent = "â€”";
-  els.predictionRemainingEstimate.textContent = "â€”";
-  els.predictionRemainingCost.textContent = "â€”";
-  els.predictionMonthlyTotal.textContent = "â€”";
-  els.predictionMonthlyCost.textContent = "â€”";
-  els.predictionProjectionMethod.textContent = "â€”";
+  els.predictionEnergyNextHour.textContent = "—";
+  els.predictionTargetTimestamp.textContent = "—";
+  els.predictionFeatureTimestamp.textContent = "—";
+  els.predictionStaleness.textContent = "—";
+  els.predictionModelVersion.textContent = "—";
+  els.predictionRfUsed.textContent = "—";
+  els.predictionMonthlyStatus.textContent = "—";
+  els.predictionObservedEnergy.textContent = "—";
+  els.predictionObservedCost.textContent = "—";
+  els.predictionPastEstimate.textContent = "—";
+  els.predictionRemainingEstimate.textContent = "—";
+  els.predictionRemainingCost.textContent = "—";
+  els.predictionMonthlyTotal.textContent = "—";
+  els.predictionMonthlyCost.textContent = "—";
+  els.predictionProjectionMethod.textContent = "—";
   els.predictionWarning.textContent = "";
   els.predictionWarning.classList.add("hidden");
   if (els.predictionCoverageWarning) els.predictionCoverageWarning.classList.add("hidden");
-  els.predictionBaselineMae.textContent = "â€”";
-  els.predictionBaselineRmse.textContent = "â€”";
-  els.predictionBaselineR2.textContent = "â€”";
-  els.predictionMae.textContent = "â€”";
-  els.predictionRmse.textContent = "â€”";
-  els.predictionR2.textContent = "â€”";
+  els.predictionBaselineMae.textContent = "—";
+  els.predictionBaselineRmse.textContent = "—";
+  els.predictionBaselineR2.textContent = "—";
+  els.predictionMae.textContent = "—";
+  els.predictionRmse.textContent = "—";
+  els.predictionR2.textContent = "—";
   els.predictionEvalHint.textContent = "Metrik evaluasi belum tersedia.";
-  els.predictionMetricNote.textContent = "â€”";
-  els.predictionResearchMinimum.textContent = "â€”";
-  els.predictionFreshness.textContent = "â€”";
-  els.predictionDataQuality.textContent = "â€”";
-  if (els.predictionGeneratedAt) els.predictionGeneratedAt.textContent = "â€”";
-  if (els.predictionSourceAge) els.predictionSourceAge.textContent = "â€”";
+  els.predictionMetricNote.textContent = "—";
+  els.predictionResearchMinimum.textContent = "—";
+  els.predictionFreshness.textContent = "—";
+  els.predictionDataQuality.textContent = "—";
+  if (els.predictionGeneratedAt) els.predictionGeneratedAt.textContent = "—";
+  if (els.predictionSourceAge) els.predictionSourceAge.textContent = "—";
   if (els.predictionEnergyLabel) els.predictionEnergyLabel.textContent = "Prediksi Historis Terakhir";
 }
 function setPredictionState(data) {
@@ -528,12 +528,12 @@ function setPredictionState(data) {
   if (els.predictionSourceAge) {
     const sourceHours = hoursFromNow(data.last_valid_raw_timestamp) ?? hoursFromNow(data.prediction_feature_timestamp);
     els.predictionSourceAge.textContent = clockHistorical
-      ? `Historis Â· ${fmtClockAge(sourceHours)}`
+      ? `Historis · ${fmtClockAge(sourceHours)}`
       : fmtClockAge(sourceHours);
   }
-  els.predictionModelVersion.textContent = data.model_version ? String(data.model_version) : "â€”";
+  els.predictionModelVersion.textContent = data.model_version ? String(data.model_version) : "—";
   els.predictionRfUsed.textContent = fmtBool(data.rf_used_in_monthly_projection);
-  els.predictionMonthlyStatus.textContent = data.monthly_projection_status ? String(data.monthly_projection_status) : "â€”";
+  els.predictionMonthlyStatus.textContent = data.monthly_projection_status ? String(data.monthly_projection_status) : "—";
   const predUsageBefore = getUsageBeforeMonitoring();
   const predCurrentUsage = predUsageBefore + (validPredictionValue(data.observed_energy_kwh) ?? 0);
   const predProjectedTotal = predUsageBefore + (validPredictionValue(data.projected_monthly_energy_kwh) ?? 0);
@@ -544,9 +544,9 @@ function setPredictionState(data) {
   // Marginal cost: remaining cost = cost(projected_total) - cost(current_usage)
   els.predictionRemainingCost.textContent = (function() {
     const remaining = validPredictionValue(data.projected_remaining_energy_kwh);
-    if (remaining === null) return "â€”";
+    if (remaining === null) return "—";
     const diff = calculate450PostpaidEnergyCost(predProjectedTotal) - calculate450PostpaidEnergyCost(predCurrentUsage);
-    return diff >= 0 ? fmtMoney(diff) : "â€”";
+    return diff >= 0 ? fmtMoney(diff) : "—";
   })();
   els.predictionMonthlyTotal.textContent = fmtPredictionValue(data.projected_monthly_energy_kwh, 4, " kWh");
   els.predictionMonthlyCost.textContent = tieredCostLabel(predProjectedTotal);
@@ -573,13 +573,13 @@ function setPredictionState(data) {
   els.predictionRmse.textContent = fmtPredictionValue(rf.rmse, 6);
   els.predictionR2.textContent = fmtPredictionValue(rf.r2, 3);
   const metricsAvailable = [baseline.mae, baseline.rmse, baseline.r2, rf.mae, rf.rmse, rf.r2].some(v => validPredictionValue(v) !== null);
-  els.predictionEvalHint.textContent = metricsAvailable ? `${ev.train_rows ?? "â€”"} train / ${ev.test_rows ?? "â€”"} test` : "Metrik evaluasi belum tersedia.";
-  els.predictionMetricNote.textContent = "Pada data pengujian kronologis, Random Forest belum mengungguli persistence baseline. Nilai MAE dan RMSE Random Forest lebih tinggi, sedangkan RÂ² lebih rendah dibandingkan baseline.";
-  els.predictionResearchMinimum.textContent = data.research_minimum_met === true ? "Terpenuhi" : data.research_minimum_met === false ? "Belum terpenuhi" : "â€”";
-  const freshnessBits = [data.prediction_status || "â€”"];
+  els.predictionEvalHint.textContent = metricsAvailable ? `${ev.train_rows ?? "—"} train / ${ev.test_rows ?? "—"} test` : "Metrik evaluasi belum tersedia.";
+  els.predictionMetricNote.textContent = "Pada data pengujian kronologis, Random Forest belum mengungguli persistence baseline. Nilai MAE dan RMSE Random Forest lebih tinggi, sedangkan R² lebih rendah dibandingkan baseline.";
+  els.predictionResearchMinimum.textContent = data.research_minimum_met === true ? "Terpenuhi" : data.research_minimum_met === false ? "Belum terpenuhi" : "—";
+  const freshnessBits = [data.prediction_status || "—"];
   if (clockHistorical) freshnessBits.push("sumber historis vs waktu sekarang");
-  els.predictionFreshness.textContent = freshnessBits.join(" Â· ");
-  els.predictionDataQuality.textContent = `Missing bucket: ${data.missing_hourly_bucket_count ?? "â€”"}; raw gap event: ${data.raw_reading_gap_event_count ?? "â€”"}`;
+  els.predictionFreshness.textContent = freshnessBits.join(" · ");
+  els.predictionDataQuality.textContent = `Missing bucket: ${data.missing_hourly_bucket_count ?? "—"}; raw gap event: ${data.raw_reading_gap_event_count ?? "—"}`;
   if (els.settingsModelStatus) els.settingsModelStatus.textContent = hasData ? (stale ? "Model aktif, prediksi bukan jam berjalan" : "Model aktif") : "Belum tersedia";
 }
 function loadPrediction() {
