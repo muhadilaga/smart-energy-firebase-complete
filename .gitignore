@@ -21,6 +21,7 @@ ml/data/*.csv
 ml/output/*
 !ml/output/.gitkeep
 !ml/output/random_forest_model.joblib
+!ml/output/random_forest_model_rfv2.joblib
 
 # Logs / temporary files
 *.log

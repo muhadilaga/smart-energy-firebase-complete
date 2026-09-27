@@ -110,6 +110,10 @@ const els = {
   predictionGeneratedAt: document.getElementById("predictionGeneratedAt"),
   predictionSourceAge: document.getElementById("predictionSourceAge"),
   predictionEnergyLabel: document.getElementById("predictionEnergyLabel"),
+  predictionCategoryCard: document.getElementById("predictionCategoryCard"),
+  predictionCategoryValue: document.getElementById("predictionCategoryValue"),
+  predictionCategoryThreshold: document.getElementById("predictionCategoryThreshold"),
+  predictionCategoryNote: document.getElementById("predictionCategoryNote"),
   runPredictionBtn: document.getElementById("runPredictionBtn"),
   predictionRunStatus: document.getElementById("predictionRunStatus"),
   runPredictionBtnText: document.querySelector("#runPredictionBtn .prediction-run-btn__text"),
@@ -493,6 +497,10 @@ function resetPredictionUi() {
   if (els.predictionGeneratedAt) els.predictionGeneratedAt.textContent = "—";
   if (els.predictionSourceAge) els.predictionSourceAge.textContent = "—";
   if (els.predictionEnergyLabel) els.predictionEnergyLabel.textContent = "Prediksi Historis Terakhir";
+  if (els.predictionCategoryValue) els.predictionCategoryValue.textContent = "—";
+  if (els.predictionCategoryThreshold) els.predictionCategoryThreshold.textContent = "Batas historis: —";
+  if (els.predictionCategoryNote) els.predictionCategoryNote.textContent = "";
+  if (els.predictionCategoryCard) els.predictionCategoryCard.className = "prediction-card prediction-card--category";
 }
 function setPredictionState(data) {
   const hasData = hasPredictionPayload(data);
@@ -580,6 +588,48 @@ function setPredictionState(data) {
   if (clockHistorical) freshnessBits.push("sumber historis vs waktu sekarang");
   els.predictionFreshness.textContent = freshnessBits.join(" · ");
   els.predictionDataQuality.textContent = `Missing bucket: ${data.missing_hourly_bucket_count ?? "—"}; raw gap event: ${data.raw_reading_gap_event_count ?? "—"}`;
+
+  // ── Consumption category rendering ──
+  if (els.predictionCategoryValue) {
+    const cat = data.consumption_category;
+    const catValid = data.category_valid_for_current_state !== false;
+    els.predictionCategoryValue.textContent = cat || "—";
+    // Reset classes
+    els.predictionCategoryCard.className = "prediction-card prediction-card--category";
+    if (cat === "BOROS" && catValid) {
+      els.predictionCategoryCard.classList.add("prediction-card--boros");
+    } else if (cat === "NORMAL" && catValid) {
+      els.predictionCategoryCard.classList.add("prediction-card--normal");
+    } else if (cat === "TIDAK_TERSEDIA") {
+      els.predictionCategoryCard.classList.add("prediction-card--unavailable");
+    }
+    if (!catValid) {
+      els.predictionCategoryCard.classList.add("prediction-card--stale");
+    }
+  }
+  if (els.predictionCategoryThreshold) {
+    els.predictionCategoryThreshold.textContent = data.category_threshold_kwh != null
+      ? `Batas historis: ${fmtPredictionValue(data.category_threshold_kwh, 4, " kWh")}`
+      : "Batas historis: —";
+  }
+  if (els.predictionCategoryNote) {
+    const cat = data.consumption_category;
+    const catValid = data.category_valid_for_current_state !== false;
+    const parts = [];
+    if (cat === "BOROS" && catValid) {
+      parts.push("Prediksi konsumsi berada di atas batas historis penggunaan perangkat ini.");
+      parts.push("Batas ini berasal dari pola historis perangkat, bukan standar konsumsi rumah tangga nasional.");
+    } else if (cat === "NORMAL" && catValid) {
+      parts.push("Prediksi konsumsi masih berada pada atau di bawah batas historis penggunaan perangkat ini.");
+    } else if (cat === "TIDAK_TERSEDIA") {
+      parts.push("Kategori konsumsi belum dapat ditentukan karena data historis belum mencukupi.");
+    }
+    if (!catValid && cat && cat !== "TIDAK_TERSEDIA") {
+      parts.push("Kategori berdasarkan prediksi historis terakhir — tidak merepresentasikan kondisi saat ini.");
+    }
+    els.predictionCategoryNote.textContent = parts.join(" ");
+  }
+
   if (els.settingsModelStatus) els.settingsModelStatus.textContent = hasData ? (stale ? "Model aktif, prediksi bukan jam berjalan" : "Model aktif") : "Belum tersedia";
 }
 function loadPrediction() {

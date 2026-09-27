@@ -1,5 +1,6 @@
 from pathlib import Path
 import json
+import os
 import sys
 import tempfile
 
@@ -16,9 +17,27 @@ if str(ML_DIR) not in sys.path:
 
 import export_firebase_history
 import predict_energy
+from train_random_forest import FEATURE_SETS
 
-MODEL_PATH = ML_DIR / "output" / "random_forest_model.joblib"
-METRICS_PATH = ML_DIR / "output" / "metrics.json"
+MODEL_REGISTRY = predict_energy.MODEL_REGISTRY
+DEFAULT_MODEL_VERSION = predict_energy.DEFAULT_MODEL_VERSION
+
+
+def _resolve_model_version() -> str:
+    v = os.environ.get("SMART_ENERGY_MODEL_VERSION") or DEFAULT_MODEL_VERSION
+    if v not in MODEL_REGISTRY:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Invalid SMART_ENERGY_MODEL_VERSION: {v!r}. Valid: {list(MODEL_REGISTRY)}"
+        )
+    return v
+
+
+def _model_paths():
+    v = _resolve_model_version()
+    reg = MODEL_REGISTRY[v]
+    return v, ML_DIR / "output" / reg["model_path"], ML_DIR / "output" / reg["metrics_path"]
+
 
 ALLOWED_ORIGINS = [
     "https://energy.muhadilaga.my.id",
@@ -103,10 +122,13 @@ def verify_firebase_id_token(id_token: str) -> None:
 
 def attach_evaluation(prediction: dict) -> dict:
     payload = dict(prediction)
-    if not METRICS_PATH.exists():
+    version = _resolve_model_version()
+    reg = MODEL_REGISTRY[version]
+    metrics_path = ML_DIR / "output" / reg["metrics_path"]
+    if not metrics_path.exists():
         return payload
     try:
-        metrics = json.loads(METRICS_PATH.read_text(encoding="utf-8"))
+        metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return payload
     if not isinstance(metrics, dict):
@@ -126,28 +148,34 @@ def attach_evaluation(prediction: dict) -> dict:
 
 @app.get("/health")
 def health():
+    version, model_path, _ = _model_paths()
     return {
         "status": "ok",
         "service": "smart-energy-random-forest-api",
-        "model_exists": MODEL_PATH.exists()
+        "model_version": version,
+        "model_exists": model_path.exists()
     }
 
 
 @app.get("/api/model-info")
 def model_info():
-    if not MODEL_PATH.exists():
+    version, model_path, _ = _model_paths()
+    if not model_path.exists():
         raise HTTPException(
             status_code=500,
-            detail="Random Forest model file not found."
+            detail=f"Random Forest model file not found for {version}."
         )
 
-    model = joblib.load(MODEL_PATH)
+    model = joblib.load(model_path)
+    features = FEATURE_SETS[version]
 
     return {
         "status": "ok",
+        "model_version": version,
         "model_type": type(model).__name__,
         "n_estimators": getattr(model, "n_estimators", None),
-        "n_features_in": getattr(model, "n_features_in_", None)
+        "n_features_in": getattr(model, "n_features_in_", None),
+        "features": features,
     }
 
 
@@ -158,10 +186,11 @@ def run_prediction(
     token = get_bearer_token(authorization)
     verify_firebase_id_token(token)
 
-    if not MODEL_PATH.exists():
+    version, model_path, _ = _model_paths()
+    if not model_path.exists():
         raise HTTPException(
             status_code=500,
-            detail="Random Forest model not found."
+            detail=f"Random Forest model not found for {version}."
         )
 
     try:

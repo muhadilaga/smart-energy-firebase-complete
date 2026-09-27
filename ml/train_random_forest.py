@@ -11,18 +11,34 @@ import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
-FEATURES = [
-    "voltage_mean",
-    "current_mean",
-    "power_mean",
-    "frequency_mean",
-    "power_factor_mean",
-    "hour_of_day",
-    "day_of_week",
-    "energy_current_hour_kwh",
-    "energy_lag_1h",
-    "energy_lag_24h",
-]
+FEATURE_SETS = {
+    "RF-v1": [
+        "voltage_mean",
+        "current_mean",
+        "power_mean",
+        "frequency_mean",
+        "power_factor_mean",
+        "hour_of_day",
+        "day_of_week",
+        "energy_current_hour_kwh",
+        "energy_lag_1h",
+        "energy_lag_24h",
+    ],
+    "RF-v2": [
+        "voltage_mean",
+        "current_mean",
+        "power_mean",
+        "frequency_mean",
+        "power_factor_mean",
+        "hour_of_day",
+        "day_of_week",
+        "energy_current_hour_kwh",
+        "energy_lag_1h",
+    ],
+}
+
+# Backward compatibility: existing code that imports FEATURES gets RF-v1.
+FEATURES = FEATURE_SETS["RF-v1"]
 
 LOCAL_TZ = "Asia/Jakarta"
 
@@ -35,6 +51,20 @@ RAW_COLUMNS = [
     "frequency",
     "power_factor",
 ]
+
+# Output file mapping per model version
+_MODEL_FILENAMES = {
+    "RF-v1": {
+        "model": "random_forest_model.joblib",
+        "metrics": "metrics.json",
+        "importance": "feature_importance.csv",
+    },
+    "RF-v2": {
+        "model": "random_forest_model_rfv2.joblib",
+        "metrics": "metrics_rfv2.json",
+        "importance": "feature_importance_rfv2.csv",
+    },
+}
 
 
 def valid_number(value):
@@ -62,6 +92,13 @@ def parse_args():
         "--output",
         default=str(Path(__file__).resolve().parent / "output"),
         help="Output folder",
+    )
+
+    parser.add_argument(
+        "--model-version",
+        default="RF-v1",
+        choices=["RF-v1", "RF-v2"],
+        help="Model version to train (default: RF-v1)",
     )
 
     return parser.parse_args()
@@ -141,19 +178,20 @@ def aggregate_hourly(df: pd.DataFrame) -> pd.DataFrame:
     return hourly
 
 
-def build_features(hourly: pd.DataFrame) -> pd.DataFrame:
+def build_features(hourly: pd.DataFrame, include_lag_24h: bool = True) -> pd.DataFrame:
     hourly = hourly.copy()
     hourly["hour_of_day"] = hourly["hour"].dt.hour
     hourly["day_of_week"] = hourly["hour"].dt.dayofweek
     hourly["energy_current_hour_kwh"] = hourly["energy_kwh_hourly"]
     hourly["energy_lag_1h"] = hourly["energy_current_hour_kwh"].shift(1)
-    hourly["energy_lag_24h"] = hourly["energy_current_hour_kwh"].shift(24)
+    if include_lag_24h:
+        hourly["energy_lag_24h"] = hourly["energy_current_hour_kwh"].shift(24)
     hourly["energy_next_hour_kwh"] = hourly["energy_current_hour_kwh"].shift(-1)
     return hourly
 
 
-def split_train_test(df: pd.DataFrame):
-    df = df.dropna(subset=FEATURES + ["energy_next_hour_kwh"]).copy()
+def split_train_test(df: pd.DataFrame, features: list[str]):
+    df = df.dropna(subset=features + ["energy_next_hour_kwh"]).copy()
     df = df.reset_index(drop=True)
     if len(df) < 10:
         return df.iloc[:0], df.iloc[:0]
@@ -184,6 +222,11 @@ def main():
     args = parse_args()
     input_path = Path(args.input)
     output_dir = Path(args.output)
+    model_version = args.model_version
+    features = FEATURE_SETS[model_version]
+    include_lag_24h = "energy_lag_24h" in features
+    filenames = _MODEL_FILENAMES[model_version]
+
     output_dir.mkdir(parents=True, exist_ok=True)
 
     df = load_csv(input_path)
@@ -196,7 +239,7 @@ def main():
         return 0
 
     hourly = aggregate_hourly(df)
-    hourly = build_features(hourly)
+    hourly = build_features(hourly, include_lag_24h=include_lag_24h)
 
     quality.update({
         "hourly_rows": int(len(hourly)),
@@ -207,7 +250,7 @@ def main():
     })
     print(json.dumps({"stage": "hourly", **quality}, default=str, ensure_ascii=False, indent=2))
 
-    model_df = hourly.dropna(subset=FEATURES + ["energy_current_hour_kwh", "energy_next_hour_kwh"]).copy()
+    model_df = hourly.dropna(subset=features + ["energy_current_hour_kwh", "energy_next_hour_kwh"]).copy()
     model_df = model_df[(model_df["coverage_flag"] == False) & (model_df["observed_hour"] == True)].copy()
     model_df = model_df.reset_index(drop=True)
 
@@ -221,14 +264,14 @@ def main():
     if not research_minimum:
         print("Warning: dataset meets technical minimum but is not yet adequate for research-grade training.")
 
-    train, test = split_train_test(model_df)
+    train, test = split_train_test(model_df, features=features)
     if len(train) == 0 or len(test) == 0:
         print("Dataset not sufficient for chronological split.")
         return 0
 
-    X_train = train[FEATURES]
+    X_train = train[features]
     y_train = train["energy_next_hour_kwh"]
-    X_test = test[FEATURES]
+    X_test = test[features]
     y_test = test["energy_next_hour_kwh"]
 
     baseline_pred = test["energy_current_hour_kwh"].to_numpy()
@@ -246,13 +289,13 @@ def main():
     rf_metrics = metrics(y_test, rf_pred)
 
     feature_importance = pd.DataFrame({
-        "feature": FEATURES,
+        "feature": features,
         "importance": model.feature_importances_,
     }).sort_values("importance", ascending=False)
 
     metrics_json = {
         "model": "RandomForestRegressor",
-        "model_version": "RF-v1",
+        "model_version": model_version,
         "train_rows": int(len(train)),
         "test_rows": int(len(test)),
         "raw_rows": int(quality["raw_rows"]),
@@ -264,12 +307,12 @@ def main():
         "data_quality": quality,
     }
 
-    joblib.dump(model, output_dir / "random_forest_model.joblib")
-    (output_dir / "metrics.json").write_text(json.dumps(metrics_json, indent=2, ensure_ascii=False), encoding="utf-8")
-    feature_importance.to_csv(output_dir / "feature_importance.csv", index=False)
+    joblib.dump(model, output_dir / filenames["model"])
+    (output_dir / filenames["metrics"]).write_text(json.dumps(metrics_json, indent=2, ensure_ascii=False), encoding="utf-8")
+    feature_importance.to_csv(output_dir / filenames["importance"], index=False)
 
     print(json.dumps(metrics_json, indent=2, ensure_ascii=False))
-    print(f"Saved model to {output_dir / 'random_forest_model.joblib'}")
+    print(f"Saved model to {output_dir / filenames['model']}")
     return 0
 
 

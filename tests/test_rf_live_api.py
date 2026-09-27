@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -137,6 +138,7 @@ class ApiTests(unittest.TestCase):
         body = response.json()
         self.assertEqual(body["status"], "ok")
         self.assertTrue(body["model_exists"])
+        self.assertEqual(body["model_version"], "RF-v1")
 
     def test_model_info(self):
         response = self.client.get("/api/model-info")
@@ -145,6 +147,9 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(body["model_type"], "RandomForestRegressor")
         self.assertEqual(body["n_estimators"], 200)
         self.assertEqual(body["n_features_in"], 10)
+        self.assertEqual(body["model_version"], "RF-v1")
+        self.assertEqual(len(body["features"]), 10)
+        self.assertIn("energy_lag_24h", body["features"])
 
     def test_predict_missing_auth_401(self):
         response = self.client.post("/api/predict")
@@ -272,6 +277,95 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("belum mengungguli persistence baseline", combined)
         self.assertNotIn("sangat akurat", combined)
         self.assertNotIn("lebih akurat", combined)
+
+    def test_category_elements_exist(self):
+        html = (PUBLIC_DIR / "index.html").read_text(encoding="utf-8")
+        for required_id in ("predictionCategoryCard", "predictionCategoryValue",
+                            "predictionCategoryThreshold", "predictionCategoryNote"):
+            self.assertIn(f'id="{required_id}"', html)
+
+    def test_category_ids_unique(self):
+        html = (PUBLIC_DIR / "index.html").read_text(encoding="utf-8")
+        cat_ids = ["predictionCategoryCard", "predictionCategoryValue",
+                   "predictionCategoryThreshold", "predictionCategoryNote"]
+        for cid in cat_ids:
+            self.assertEqual(html.count(f'id="{cid}"'), 1, f"Duplicate or missing: {cid}")
+
+    def test_js_references_category_elements(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("predictionCategoryCard", js)
+        self.assertIn("predictionCategoryValue", js)
+        self.assertIn("predictionCategoryThreshold", js)
+        self.assertIn("predictionCategoryNote", js)
+        self.assertIn("consumption_category", js)
+        self.assertIn("category_valid_for_current_state", js)
+        self.assertIn("category_threshold_kwh", js)
+
+    def test_category_not_in_required_payload(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        # hasPredictionPayload required list should NOT include category fields
+        idx = js.find("function hasPredictionPayload")
+        func_body = js[idx:idx+500]
+        self.assertNotIn("consumption_category", func_body)
+        self.assertNotIn("category_threshold_kwh", func_body)
+
+    def test_category_stale_path_exists(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("prediction-card--stale", js)
+        self.assertIn("prediction-card--boros", js)
+        self.assertIn("prediction-card--normal", js)
+        self.assertIn("prediction-card--unavailable", js)
+
+
+class VersionAwareApiTests(unittest.TestCase):
+    def setUp(self):
+        self.client = TestClient(app)
+
+    def test_health_rf_v1_default(self):
+        response = self.client.get("/health")
+        body = response.json()
+        self.assertEqual(body["model_version"], "RF-v1")
+        self.assertTrue(body["model_exists"])
+
+    def test_model_info_rf_v1_default(self):
+        response = self.client.get("/api/model-info")
+        body = response.json()
+        self.assertEqual(body["model_version"], "RF-v1")
+        self.assertEqual(body["n_features_in"], 10)
+
+    @patch.dict(os.environ, {"SMART_ENERGY_MODEL_VERSION": "RF-v2"})
+    def test_health_rf_v2(self):
+        response = self.client.get("/health")
+        body = response.json()
+        self.assertEqual(body["model_version"], "RF-v2")
+        self.assertTrue(body["model_exists"])
+
+    @patch.dict(os.environ, {"SMART_ENERGY_MODEL_VERSION": "RF-v2"})
+    def test_model_info_rf_v2(self):
+        response = self.client.get("/api/model-info")
+        body = response.json()
+        self.assertEqual(body["model_version"], "RF-v2")
+        self.assertEqual(body["n_features_in"], 9)
+        self.assertNotIn("energy_lag_24h", body["features"])
+
+    @patch.dict(os.environ, {"SMART_ENERGY_MODEL_VERSION": "INVALID"})
+    def test_invalid_version_fails(self):
+        response = self.client.get("/health")
+        self.assertEqual(response.status_code, 500)
+
+    def test_prediction_has_category_fields(self):
+        if not HISTORY_REAL.exists():
+            self.skipTest("history_real.csv missing")
+        records = csv_to_records(HISTORY_REAL)
+        with patch("main.verify_firebase_id_token", return_value=None), \
+             patch("export_firebase_history.fetch_history", return_value=records):
+            response = self.client.post("/api/predict", headers={"Authorization": "Bearer x"})
+        self.assertEqual(response.status_code, 200)
+        prediction = response.json()["prediction"]
+        self.assertIn("consumption_category", prediction)
+        self.assertIn("category_threshold_kwh", prediction)
+        self.assertIn("category_valid_for_current_state", prediction)
+        self.assertIn(prediction["consumption_category"], ("NORMAL", "BOROS", "TIDAK_TERSEDIA"))
 
 
 if __name__ == "__main__":
