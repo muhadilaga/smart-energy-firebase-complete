@@ -316,6 +316,51 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("prediction-card--normal", js)
         self.assertIn("prediction-card--unavailable", js)
 
+    def test_no_hardcoded_rf_v1_explanatory_text(self):
+        html = (PUBLIC_DIR / "index.html").read_text(encoding="utf-8")
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        combined = html + js
+        self.assertNotIn("inference model RF-v1", combined)
+        self.assertNotIn("inference RF-v1", combined)
+        self.assertIn("model Random Forest yang aktif", html)
+
+    def test_monthly_projection_separated_from_rf_prediction(self):
+        html = (PUBLIC_DIR / "index.html").read_text(encoding="utf-8")
+        self.assertIn("Proyeksi Bulan Berjalan", html)
+        self.assertIn("Prediksi Random Forest 1 jam hanya digunakan", html)
+        self.assertIn("Estimasi Data Awal Bulan", html)
+        self.assertNotIn("Data Tidak Mencakup Awal Bulan", html)
+
+    def test_stale_warning_user_facing(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("Prediksi menggunakan data historis", js)
+        self.assertIn("tidak digunakan dalam proyeksi bulan berjalan", js)
+        idx = js.find("els.predictionProjectionMethod.textContent")
+        method_block = js[idx:idx + 900]
+        self.assertNotIn("prediction_fresh bernilai", method_block)
+        self.assertNotIn("jika prediction_fresh", method_block)
+
+    def test_national_standard_disclaimer_remains(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("bukan standar konsumsi rumah tangga nasional", js)
+        self.assertNotIn("mengklasifikasikan", js)
+        self.assertNotIn("standar PLN", js)
+
+    def test_existing_prediction_ids_remain(self):
+        html = (PUBLIC_DIR / "index.html").read_text(encoding="utf-8")
+        for required_id in (
+            "predictionEnergyNextHour",
+            "predictionFeatureTimestamp",
+            "predictionTargetTimestamp",
+            "predictionStaleness",
+            "predictionSourceAge",
+            "predictionRfUsed",
+            "predictionCoverageWarning",
+            "predictionProjectionMethod",
+            "predictionWarning",
+        ):
+            self.assertIn(f'id="{required_id}"', html)
+
 
 class VersionAwareApiTests(unittest.TestCase):
     def setUp(self):

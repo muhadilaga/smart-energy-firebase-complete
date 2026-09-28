@@ -512,18 +512,18 @@ function setPredictionState(data) {
   const pipelineStale = data.prediction_fresh === false || data.prediction_status === "stale";
   const clockHistorical = isClockHistorical(data);
   const stale = pipelineStale || clockHistorical;
-  els.predictionModelStatus.textContent = pipelineStale ? "Stale pipeline" : (clockHistorical ? "Data historis" : "Fresh");
+  els.predictionModelStatus.textContent = pipelineStale ? "Data prediksi tidak terkini" : (clockHistorical ? "Data historis" : "Terkini");
   els.predictionModelStatus.classList.toggle("chip--warning", stale);
-  els.predictionHeroLabel.textContent = "Prediksi";
+  els.predictionHeroLabel.textContent = "Prediksi Konsumsi 1 Jam Berikutnya";
   if (clockHistorical) {
     els.predictionHeroTitle.textContent = "Prediksi dari Data Historis";
-    els.predictionHeroSubtext.textContent = "Sumber data lebih lama dari waktu sekarang. Hasil ini prediksi 1 jam setelah feature timestamp historis, bukan prediksi jam berjalan saat ini.";
+    els.predictionHeroSubtext.textContent = "Prediksi ini menghitung konsumsi energi untuk 1 jam setelah waktu data fitur yang tersedia. Jika data sumber sudah lama, hasil tidak merepresentasikan kondisi saat ini.";
   } else if (pipelineStale) {
-    els.predictionHeroTitle.textContent = "Prediksi 1 Jam Belum Terbaru";
-    els.predictionHeroSubtext.textContent = "Data fitur terakhir yang lengkap belum cukup untuk menghasilkan prediksi terkini.";
+    els.predictionHeroTitle.textContent = "Prediksi dari Data Historis";
+    els.predictionHeroSubtext.textContent = "Prediksi ini menghitung konsumsi energi untuk 1 jam setelah waktu data fitur yang tersedia. Jika data sumber sudah lama, hasil tidak merepresentasikan kondisi saat ini.";
   } else {
     els.predictionHeroTitle.textContent = "Prediksi Konsumsi 1 Jam Berikutnya";
-    els.predictionHeroSubtext.textContent = "Prediksi konsumsi energi untuk satu jam setelah feature timestamp terbaru.";
+    els.predictionHeroSubtext.textContent = "Prediksi konsumsi energi untuk satu jam setelah waktu data fitur yang tersedia.";
   }
   if (els.predictionEnergyLabel) {
     els.predictionEnergyLabel.textContent = (pipelineStale || clockHistorical) ? "Prediksi Historis Terakhir" : "Prediksi 1 Jam Berikutnya";
@@ -559,14 +559,15 @@ function setPredictionState(data) {
   els.predictionMonthlyTotal.textContent = fmtPredictionValue(data.projected_monthly_energy_kwh, 4, " kWh");
   els.predictionMonthlyCost.textContent = tieredCostLabel(predProjectedTotal);
   els.predictionProjectionMethod.textContent = clockHistorical
-    ? "Hasil dihitung dari data sumber historis. Feature timestamp dan target timestamp merujuk ke jam data, bukan jam berjalan saat ini. Proyeksi bulanan mengikuti payload model; prediksi RF hanya masuk proyeksi jika prediction_fresh bernilai true."
+    ? "Proyeksi bulanan dihitung terutama dari data konsumsi historis yang tersedia. Prediksi Random Forest 1 jam hanya disertakan apabila data prediksi masih cukup terkini. Feature Timestamp dan Target Prediksi merujuk ke jam data, bukan jam berjalan saat ini."
     : stale
-    ? "Proyeksi bulanan dihitung dari konsumsi aktual yang terobservasi dan rata-rata konsumsi per jam. Prediksi Random Forest hanya digunakan untuk satu jam berikutnya jika prediksi masih fresh. Pada kondisi saat ini, prediksi RF stale sehingga tidak digunakan dalam proyeksi bulan."
-    : "Proyeksi bulanan dihitung dari konsumsi aktual yang terobservasi, rata-rata konsumsi per jam, dan prediksi Random Forest satu jam berikutnya jika prediksi masih fresh.";
+    ? "Prediksi Random Forest saat ini tidak digunakan dalam proyeksi bulanan karena sumber datanya sudah tidak cukup terkini."
+    : "Proyeksi bulanan dihitung terutama dari data konsumsi historis yang tersedia. Prediksi Random Forest 1 jam hanya disertakan apabila data prediksi masih cukup terkini.";
   if (els.predictionCoverageWarning) els.predictionCoverageWarning.classList.toggle("hidden", data.coverage_from_month_start !== false);
   const warningParts = [];
-  if (clockHistorical) warningParts.push("Sumber data historis terhadap waktu sekarang. Jangan baca hasil ini sebagai prediksi jam berjalan saat ini.");
-  if (pipelineStale) warningParts.push("Prediksi RF stale terhadap pembacaan mentah terakhir dan tidak digunakan dalam proyeksi bulanan.");
+  if (clockHistorical || pipelineStale) {
+    warningParts.push("Prediksi menggunakan data historis. Data terbaru yang dapat digunakan model sudah tidak mewakili kondisi saat ini. Hasil prediksi tetap ditampilkan sebagai informasi historis, tetapi tidak digunakan dalam proyeksi bulan berjalan. Lihat Feature Timestamp dan Target Prediksi untuk mengetahui periode yang diprediksi.");
+  }
   const warningText = warningParts.join(" ");
   els.predictionWarning.textContent = warningText;
   els.predictionWarning.classList.toggle("hidden", !warningText);
@@ -618,14 +619,16 @@ function setPredictionState(data) {
     const parts = [];
     if (cat === "BOROS" && catValid) {
       parts.push("Prediksi konsumsi berada di atas batas historis penggunaan perangkat ini.");
-      parts.push("Batas ini berasal dari pola historis perangkat, bukan standar konsumsi rumah tangga nasional.");
+      parts.push("Batas historis berasal dari pola penggunaan perangkat ini, bukan standar konsumsi rumah tangga nasional.");
     } else if (cat === "NORMAL" && catValid) {
       parts.push("Prediksi konsumsi masih berada pada atau di bawah batas historis penggunaan perangkat ini.");
+      parts.push("Batas historis berasal dari pola penggunaan perangkat ini, bukan standar konsumsi rumah tangga nasional.");
     } else if (cat === "TIDAK_TERSEDIA") {
       parts.push("Kategori konsumsi belum dapat ditentukan karena data historis belum mencukupi.");
     }
     if (!catValid && cat && cat !== "TIDAK_TERSEDIA") {
-      parts.push("Kategori berdasarkan prediksi historis terakhir — tidak merepresentasikan kondisi saat ini.");
+      parts.push("Kategori berdasarkan prediksi historis dan tidak merepresentasikan kondisi konsumsi saat ini.");
+      parts.push("Batas historis berasal dari pola penggunaan perangkat ini, bukan standar konsumsi rumah tangga nasional.");
     }
     els.predictionCategoryNote.textContent = parts.join(" ");
   }
@@ -685,7 +688,7 @@ async function runLivePrediction() {
     return;
   }
   setPredictionRunLoading(true);
-  setPredictionRunStatus("Mengambil riwayat Firebase dan menjalankan inference RF-v1...", null);
+  setPredictionRunStatus("Mengambil riwayat Firebase dan menjalankan prediksi Random Forest...", null);
   try {
     const token = await user.getIdToken();
     const response = await fetch(getPredictApiUrl(), {
@@ -716,7 +719,7 @@ async function runLivePrediction() {
     const historicalNote = isClockHistorical(prediction)
       ? ` Sumber data historis (${fmtClockAge(sourceHours)}).`
       : "";
-    setPredictionRunStatus(`Perhitungan selesai. Model ${prediction.model_version || "RF-v1"}.${historicalNote}`, "ok");
+    setPredictionRunStatus(`Perhitungan selesai. Model ${prediction.model_version || "aktif"}.${historicalNote}`, "ok");
   } catch {
     setPredictionRunStatus(predictErrorMessage(0), "error");
   } finally {

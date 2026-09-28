@@ -526,7 +526,7 @@
           <div class="prediction-run-panel">
             <div class="prediction-run-copy">
               <strong>Perhitungan Random Forest</strong>
-              <p>Ambil riwayat Firebase, jalankan preprocessing yang sama dengan pipeline penelitian, lalu inference model RF-v1. Tombol ini tidak melakukan retraining.</p>
+              <p>Ambil data riwayat Firebase, lakukan preprocessing, lalu jalankan prediksi menggunakan model Random Forest yang aktif. Tombol ini tidak melakukan retraining.</p>
             </div>
             <button id="runPredictionBtn" class="prediction-run-btn" type="button">
               <span class="material-symbols-outlined" aria-hidden="true">calculate</span>
@@ -559,31 +559,35 @@
             <div class="prediction-card">
               <span class="prediction-card__label">Feature Timestamp</span>
               <strong id="predictionFeatureTimestamp">—</strong>
+              <small>Waktu data yang digunakan sebagai input model.</small>
             </div>
             <div class="prediction-card">
               <span class="prediction-card__label">Target Prediksi</span>
               <strong id="predictionTargetTimestamp">—</strong>
+              <small>Jam yang diprediksi oleh model, yaitu 1 jam setelah feature timestamp.</small>
             </div>
             <div class="prediction-card">
-              <span class="prediction-card__label">Staleness pipeline</span>
+              <span class="prediction-card__label">Jarak Data Fitur ke Data Mentah Terakhir</span>
               <strong id="predictionStaleness">—</strong>
-              <small>Jarak fitur lengkap vs pembacaan mentah terakhir. Bukan umur terhadap waktu sekarang.</small>
+              <small>Selisih waktu antara feature lengkap terakhir yang dapat digunakan model dan pembacaan mentah terakhir yang tersedia.</small>
             </div>
             <div class="prediction-card">
               <span class="prediction-card__label">Waktu perhitungan</span>
               <strong id="predictionGeneratedAt">—</strong>
             </div>
             <div class="prediction-card">
-              <span class="prediction-card__label">Umur data sumber</span>
+              <span class="prediction-card__label">Umur Data terhadap Waktu Sekarang</span>
               <strong id="predictionSourceAge">—</strong>
+              <small>Selisih antara waktu data yang digunakan dan waktu saat perhitungan dilakukan.</small>
             </div>
             <div class="prediction-card">
               <span class="prediction-card__label">Versi Model</span>
               <strong id="predictionModelVersion">—</strong>
             </div>
             <div class="prediction-card">
-              <span class="prediction-card__label">RF dalam Proyeksi Bulan</span>
+              <span class="prediction-card__label">Prediksi RF Digunakan</span>
               <strong id="predictionRfUsed">—</strong>
+              <small>Menunjukkan apakah prediksi Random Forest 1 jam ikut diperhitungkan dalam proyeksi bulan berjalan.</small>
             </div>
           </div>
         </section>
@@ -593,6 +597,7 @@
             <h3>Proyeksi Bulan Berjalan</h3>
             <span class="chip chip--muted" id="predictionMonthlyStatus">—</span>
           </div>
+          <p class="prediction-info-text">Proyeksi ini memperkirakan total konsumsi sampai akhir bulan dari data konsumsi yang tersedia. Prediksi Random Forest 1 jam hanya digunakan jika hasilnya masih memenuhi syarat data yang cukup terkini.</p>
           <div class="prediction-metrics-grid prediction-metrics-grid--monthly">
             <article class="prediction-card prediction-card--metric"><span class="prediction-card__label">Konsumsi Terobservasi</span><strong id="predictionObservedEnergy">—</strong><small id="predictionObservedCost">—</small></article>
             <article class="prediction-card prediction-card--metric"><span class="prediction-card__label">Estimasi Sebelum Dataset</span><strong id="predictionPastEstimate">—</strong></article>
@@ -600,8 +605,8 @@
             <article class="prediction-card prediction-card--metric prediction-card--total"><span class="prediction-card__label">Proyeksi Total Bulan</span><strong id="predictionMonthlyTotal">—</strong><small id="predictionMonthlyCost">—</small></article>
           </div>
           <div class="prediction-coverage-warning hidden" id="predictionCoverageWarning">
-            <strong>Data Tidak Mencakup Awal Bulan</strong>
-            <p>Sebagian konsumsi sebelum periode dataset diestimasi menggunakan rata-rata konsumsi per jam dari data aktual yang tersedia.</p>
+            <strong>Estimasi Data Awal Bulan</strong>
+            <p>Data monitoring tidak tersedia sejak awal bulan. Konsumsi pada periode sebelum data mulai tercatat diestimasi menggunakan rata-rata konsumsi per jam dari data aktual yang tersedia. Angka ini estimasi, bukan prediksi Random Forest dan bukan pengukuran aktual.</p>
           </div>
           <p class="prediction-info-text" id="predictionProjectionMethod">—</p>
           <p class="prediction-warning hidden" id="predictionWarning"></p>
