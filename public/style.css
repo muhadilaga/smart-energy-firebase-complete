@@ -273,7 +273,11 @@ h3{font-size:18px;line-height:1.2}
 .settings-info-label{display:block;color:var(--muted);font-size:13px;font-weight:600;line-height:1.45;letter-spacing:.01em}
 .settings-info-value{display:block;font-size:15px;line-height:1.45;font-weight:700;word-break:break-word}
 .settings-field input{width:100%}
+.settings-field select{width:100%;min-height:44px;border-radius:12px;padding:8px 12px;font-size:15px;background:var(--surface);color:var(--text);border:1px solid var(--border)}
 .settings-field--spaced{display:block;margin-top:16px}
+.history-location-filter{display:flex;align-items:center;gap:8px;margin-left:auto}
+.history-location-filter__label{font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap}
+.history-location-filter__select{min-height:36px;border-radius:10px;padding:4px 8px;font-size:13px;background:var(--surface);color:var(--text);border:1px solid var(--border)}
 .warning-text{color:#8a5a00!important;font-weight:800}
 .settings-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:16px}
 .settings-actions .primary-btn,.settings-actions .secondary-btn{width:100%;min-height:44px}

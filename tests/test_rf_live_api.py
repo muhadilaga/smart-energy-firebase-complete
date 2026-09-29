@@ -413,5 +413,386 @@ class VersionAwareApiTests(unittest.TestCase):
         self.assertIn(prediction["consumption_category"], ("NORMAL", "BOROS", "TIDAK_TERSEDIA"))
 
 
+FIRMWARE_DIR = Path(r"D:\Backup 160326\Documents\Arduino\PZEM_FIREBASE")
+
+
+class LocationRegistryTests(unittest.TestCase):
+    def test_location_allowlist_in_firebase_config(self):
+        js = (PUBLIC_DIR / "firebase-config.js").read_text(encoding="utf-8")
+        self.assertIn("LOCATION_ALLOWLIST", js)
+        for code in ("ruang_kerja", "kamar_tidur", "ruang_tamu", "dapur"):
+            self.assertIn(code, js)
+        self.assertIn("LOCATION_UNKNOWN_LABEL", js)
+        self.assertIn("Lokasi tidak diketahui", js)
+
+    def test_location_unknown_label_in_app_js(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("LOCATION_UNKNOWN_LABEL", js)
+        self.assertIn("resolveLocationLabel", js)
+
+    def test_location_allowlist_imported_in_app_js(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        import_lines = [l for l in js.split("\n") if l.startswith("import")]
+        combined_imports = " ".join(import_lines)
+        self.assertIn("LOCATION_ALLOWLIST", combined_imports)
+
+    def test_location_allowlist_has_four_entries(self):
+        js = (PUBLIC_DIR / "firebase-config.js").read_text(encoding="utf-8")
+        import re
+        m = re.search(r"LOCATION_ALLOWLIST\s*=\s*\{([^}]+)\}", js)
+        self.assertIsNotNone(m)
+        body = m.group(1)
+        for code in ("ruang_kerja", "kamar_tidur", "ruang_tamu", "dapur"):
+            self.assertIn(code, body)
+
+
+class SettingsLocationUITests(unittest.TestCase):
+    def test_location_select_exists(self):
+        html = (PUBLIC_DIR / "index.html").read_text(encoding="utf-8")
+        self.assertIn('id="locationSelect"', html)
+
+    def test_location_select_has_four_options(self):
+        html = (PUBLIC_DIR / "index.html").read_text(encoding="utf-8")
+        import re
+        m = re.search(r'id="locationSelect"[^>]*>(.*?)</select>', html, re.DOTALL)
+        self.assertIsNotNone(m)
+        body = m.group(1)
+        self.assertIn("ruang_kerja", body)
+        self.assertIn("kamar_tidur", body)
+        self.assertIn("ruang_tamu", body)
+        self.assertIn("dapur", body)
+        self.assertIn("Lokasi tidak diketahui", body)
+
+    def test_save_location_button_exists(self):
+        html = (PUBLIC_DIR / "index.html").read_text(encoding="utf-8")
+        self.assertIn('id="saveLocationBtn"', html)
+
+    def test_location_message_element_exists(self):
+        html = (PUBLIC_DIR / "index.html").read_text(encoding="utf-8")
+        self.assertIn('id="locationMsg"', html)
+
+    def test_settings_location_value_display(self):
+        html = (PUBLIC_DIR / "index.html").read_text(encoding="utf-8")
+        self.assertIn('id="settingsLocationValue"', html)
+
+    def test_settings_session_value_display(self):
+        html = (PUBLIC_DIR / "index.html").read_text(encoding="utf-8")
+        self.assertIn('id="settingsSessionValue"', html)
+
+    def test_location_description_text(self):
+        html = (PUBLIC_DIR / "index.html").read_text(encoding="utf-8")
+        self.assertIn("Lokasi digunakan untuk memberi konteks pada data pengukuran baru", html)
+
+
+class HistoryLocationUITests(unittest.TestCase):
+    def test_history_table_has_location_header(self):
+        html = (PUBLIC_DIR / "index.html").read_text(encoding="utf-8")
+        self.assertIn("<th>Lokasi</th>", html)
+
+    def test_history_location_filter_exists(self):
+        html = (PUBLIC_DIR / "index.html").read_text(encoding="utf-8")
+        self.assertIn('id="historyLocationFilter"', html)
+
+    def test_history_location_filter_has_options(self):
+        html = (PUBLIC_DIR / "index.html").read_text(encoding="utf-8")
+        import re
+        m = re.search(r'id="historyLocationFilter"[^>]*>(.*?)</select>', html, re.DOTALL)
+        self.assertIsNotNone(m)
+        body = m.group(1)
+        self.assertIn("Semua Lokasi", body)
+        self.assertIn("unknown", body)
+        self.assertIn("ruang_kerja", body)
+        self.assertIn("kamar_tidur", body)
+        self.assertIn("ruang_tamu", body)
+        self.assertIn("dapur", body)
+
+
+class DashboardLocationUITests(unittest.TestCase):
+    def test_device_location_chip_exists(self):
+        html = (PUBLIC_DIR / "index.html").read_text(encoding="utf-8")
+        self.assertIn('id="deviceLocationChip"', html)
+
+    def test_monitor_location_value_exists(self):
+        html = (PUBLIC_DIR / "index.html").read_text(encoding="utf-8")
+        self.assertIn('id="monitorLocationValue"', html)
+
+
+class AppJsLocationLogicTests(unittest.TestCase):
+    def test_location_state_exists(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("deviceLocationState", js)
+        self.assertIn("locationFilter", js)
+
+    def test_resolve_location_label_function(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("function resolveLocationLabel", js)
+
+    def test_generate_session_id_function(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("function generateSessionId", js)
+
+    def test_read_device_config_function(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("function readDeviceConfig", js)
+
+    def test_write_device_config_function(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("function writeDeviceConfig", js)
+
+    def test_create_session_function(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("function createSession", js)
+
+    def test_save_location_function(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("function saveLocation", js)
+
+    def test_update_device_location_display_function(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("function updateDeviceLocationDisplay", js)
+
+    def test_location_filter_event_handler(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("historyLocationFilter", js)
+        self.assertIn("locationFilter", js)
+
+    def test_save_location_event_handler(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("saveLocationBtn", js)
+
+    def test_read_device_config_called_on_auth(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        # Find the event handler call (not the import)
+        idx = js.find("onAuthStateChanged(auth,")
+        self.assertGreater(idx, -1)
+        auth_block = js[idx:idx+600]
+        self.assertIn("readDeviceConfig", auth_block)
+
+    def test_update_device_location_display_called_in_render(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("updateDeviceLocationDisplay()", js)
+
+    def test_parse_history_includes_location_code(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("location_code: val.location_code", js)
+
+    def test_filter_history_includes_location_key(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("filterHistoryRecords(all, historyState.filter, historyState.locationFilter)", js)
+
+    def test_csv_export_includes_location_columns(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("location_code,location_label,session_id", js)
+
+    def test_same_location_no_new_session(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("Lokasi sama, tidak ada perubahan", js)
+
+    def test_firebase_database_imports_set_get(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("fbSet", js)
+        self.assertIn("fbGet", js)
+
+
+class FirmwareLocationTests(unittest.TestCase):
+    def _read_firmware(self):
+        fw = FIRMWARE_DIR / "PZEM_FIREBASE.ino"
+        if not fw.exists():
+            self.skipTest("Firmware file not found")
+        return fw.read_text(encoding="utf-8", errors="replace")
+
+    def test_location_state_globals(self):
+        fw = self._read_firmware()
+        self.assertIn("String currentLocationCode", fw)
+        self.assertIn("String currentSessionId", fw)
+
+    def test_location_allowlist(self):
+        fw = self._read_firmware()
+        self.assertIn("ruang_kerja", fw)
+        self.assertIn("kamar_tidur", fw)
+        self.assertIn("ruang_tamu", fw)
+        self.assertIn("dapur", fw)
+        self.assertIn("isValidLocation", fw)
+
+    def test_config_poll_function(self):
+        fw = self._read_firmware()
+        self.assertIn("pollDeviceConfig", fw)
+        self.assertIn("CONFIG_POLL_INTERVAL", fw)
+        self.assertIn("30000", fw)
+
+    def test_config_poll_in_loop(self):
+        fw = self._read_firmware()
+        self.assertIn("pollDeviceConfig()", fw.split("void loop()")[1] if "void loop()" in fw else "")
+
+    def test_location_stamp_in_latest(self):
+        fw = self._read_firmware()
+        latest_section = fw.split("KIRIM DATA TERBARU KE FIREBASE")[1] if "KIRIM DATA TERBARU KE FIREBASE" in fw else ""
+        self.assertIn("location_code", latest_section)
+        self.assertIn("session_id", latest_section)
+
+    def test_location_stamp_in_history(self):
+        fw = self._read_firmware()
+        history_section = fw.split("SIMPAN DATA HISTORY")[1] if "SIMPAN DATA HISTORY" in fw else ""
+        self.assertIn("location_code", history_section)
+        self.assertIn("session_id", history_section)
+
+    def test_config_read_does_not_block_pzem(self):
+        fw = self._read_firmware()
+        config_fn = fw.split("void pollDeviceConfig")[1].split("void ")[0] if "void pollDeviceConfig" in fw else ""
+        self.assertIn("WiFi.status()", config_fn)
+        self.assertIn("app.ready()", config_fn)
+
+    def test_config_poll_timer_in_loop(self):
+        fw = self._read_firmware()
+        loop_section = fw.split("void loop()")[1] if "void loop()" in fw else ""
+        self.assertIn("lastConfigPoll", loop_section)
+        self.assertIn("CONFIG_POLL_INTERVAL", loop_section)
+
+    def test_no_credentials_in_location_code(self):
+        fw = self._read_firmware()
+        # Check that no password/API key literals appear in the location session section
+        # (the section after "LOCATION / SESSION STATE")
+        loc_section_start = fw.find("LOCATION / SESSION STATE")
+        if loc_section_start < 0:
+            self.skipTest("Location section not found")
+        loc_section = fw[loc_section_start:loc_section_start+2000]
+        self.assertNotIn("adiberlaga", loc_section)
+        self.assertNotIn("Adiberlaga", loc_section)
+        self.assertNotIn("AIza", loc_section)
+
+
+class RegressionPhase5BTests(unittest.TestCase):
+    def setUp(self):
+        self.client = TestClient(app)
+
+    def test_rf_v2_features_unchanged(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        py = (ML_DIR / "train_random_forest.py").read_text(encoding="utf-8")
+        self.assertIn("energy_lag_24h", py)
+        self.assertNotIn("location_code", py.split("FEATURE_SETS")[1].split("}")[0] if "FEATURE_SETS" in py else "")
+
+    def test_method_f_unchanged(self):
+        cat = (ML_DIR / "consumption_category.py").read_text(encoding="utf-8")
+        self.assertIn("median_h", cat)
+        self.assertIn("1.5", cat)
+        self.assertNotIn("location_code", cat.split("def ")[1].split("}")[0] if "def " in cat else "")
+
+    def test_monthly_formula_unchanged(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("projected_monthly_energy_kwh", js)
+        self.assertNotIn("location_scope", js)
+
+    def test_phase4e_wording_preserved(self):
+        html = (PUBLIC_DIR / "index.html").read_text(encoding="utf-8")
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("model Random Forest yang aktif", html)
+        self.assertIn("Data prediksi tidak terkini", js)
+        self.assertIn("Estimasi Data Awal Bulan", html)
+
+    def test_prediction_has_category_fields(self):
+        if not HISTORY_REAL.exists():
+            self.skipTest("history_real.csv missing")
+        records = csv_to_records(HISTORY_REAL)
+        with patch("main.verify_firebase_id_token", return_value=None), \
+             patch("export_firebase_history.fetch_history", return_value=records):
+            response = self.client.post("/api/predict", headers={"Authorization": "Bearer x"})
+        self.assertEqual(response.status_code, 200)
+        prediction = response.json()["prediction"]
+        self.assertIn("consumption_category", prediction)
+        self.assertIn("category_threshold_kwh", prediction)
+
+    def test_history_real_csv_frozen(self):
+        import hashlib
+        expected = "c321b9b56e07c390"
+        actual = hashlib.sha256(HISTORY_REAL.read_bytes()).hexdigest()[:16]
+        self.assertEqual(actual, expected, "history_real.csv checksum mismatch!")
+
+    def test_history_live_csv_frozen(self):
+        import hashlib
+        expected = "6f6c461cb4b101cc"
+        actual = hashlib.sha256(HISTORY_LIVE.read_bytes()).hexdigest()[:16]
+        self.assertEqual(actual, expected, "history_live.csv checksum mismatch!")
+
+    def test_rf_v2_model_frozen(self):
+        import hashlib
+        rf_v2 = ML_DIR / "output" / "random_forest_model_rfv2.joblib"
+        if not rf_v2.exists():
+            self.skipTest("RF-v2 model not found")
+        expected = "47e2ae4406470a76"
+        actual = hashlib.sha256(rf_v2.read_bytes()).hexdigest()[:16]
+        self.assertEqual(actual, expected, "RF-v2 model checksum mismatch!")
+
+    def test_rf_v1_model_frozen(self):
+        import hashlib
+        expected = "401088348c0656f0"
+        actual = hashlib.sha256(MODEL_PATH.read_bytes()).hexdigest()[:16]
+        self.assertEqual(actual, expected, "RF-v1 model checksum mismatch!")
+
+
+class LocationResetGuardTests(unittest.TestCase):
+    def test_empty_reset_prevented_when_location_set(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("Gunakan salah satu lokasi yang tersedia", js)
+        self.assertIn("Tidak bisa direset ke tidak diketahui", js)
+
+    def test_empty_first_assignment_allowed(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("Lokasi pertama kali ditetapkan", js)
+
+    def test_no_location_reset_message(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertNotIn("Lokasi direset", js)
+
+
+class SessionIdParsingTests(unittest.TestCase):
+    def test_parse_history_includes_session_id(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("session_id: val.session_id", js)
+
+    def test_csv_exports_session_id_from_record(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("r.session_id", js)
+
+    def test_csv_header_has_session_id(self):
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("location_code,location_label,session_id", js)
+
+
+class FirmwareGetApiTests(unittest.TestCase):
+    def _read_firmware(self):
+        fw = FIRMWARE_DIR / "PZEM_FIREBASE.ino"
+        if not fw.exists():
+            self.skipTest("Firmware not found")
+        return fw.read_text(encoding="utf-8", errors="replace")
+
+    def test_uses_get_string_not_firebase_json(self):
+        fw = self._read_firmware()
+        self.assertIn('Database.get<String>', fw)
+        self.assertNotIn('FirebaseJson *json = Database.get', fw)
+        self.assertNotIn('json->get(data,', fw)
+
+    def test_json_extract_helper_exists(self):
+        fw = self._read_firmware()
+        self.assertIn("jsonExtractString", fw)
+        self.assertIn("String jsonExtractString", fw)
+
+    def test_config_read_error_handling(self):
+        fw = self._read_firmware()
+        self.assertIn("lastError().code()", fw)
+        self.assertIn("Config read error", fw)
+
+    def test_immediate_first_fetch(self):
+        fw = self._read_firmware()
+        self.assertIn("configFetchAttempted", fw)
+        loop = fw.split("void loop()")[1] if "void loop()" in fw else ""
+        self.assertIn("!configFetchAttempted", loop)
+        self.assertIn("configFetchAttempted = true", loop)
+
+    def test_normal_poll_after_first(self):
+        fw = self._read_firmware()
+        loop = fw.split("void loop()")[1] if "void loop()" in fw else ""
+        self.assertIn("CONFIG_POLL_INTERVAL", loop)
+
+
 if __name__ == "__main__":
     unittest.main()

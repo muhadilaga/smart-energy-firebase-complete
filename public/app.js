@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
-import { getDatabase, ref, onValue, query, orderByKey, limitToLast } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-database.js";
-import { firebaseConfig, DEVICE_ID, PREDICT_API_BASE_URL } from "./firebase-config.js";
+import { getDatabase, ref, onValue, query, orderByKey, limitToLast, set as fbSet, get as fbGet } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-database.js";
+import { firebaseConfig, DEVICE_ID, PREDICT_API_BASE_URL, LOCATION_ALLOWLIST, LOCATION_UNKNOWN_LABEL } from "./firebase-config.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -138,12 +138,21 @@ const els = {
   navButtons: Array.from(document.querySelectorAll(".bottom-nav__item[data-page], .desktop-nav__item[data-page]")),
   dashboardSection: document.getElementById("dashboardSection"),
   monitoringSection: document.getElementById("monitoringSection"),
+  deviceLocationChip: document.getElementById("deviceLocationChip"),
+  monitorLocationValue: document.getElementById("monitorLocationValue"),
+  locationSelect: document.getElementById("locationSelect"),
+  settingsLocationValue: document.getElementById("settingsLocationValue"),
+  settingsSessionValue: document.getElementById("settingsSessionValue"),
+  saveLocationBtn: document.getElementById("saveLocationBtn"),
+  locationMsg: document.getElementById("locationMsg"),
+  historyLocationFilter: document.getElementById("historyLocationFilter"),
 };
 
 const chartState = { labels: [], values: [] };
 const monitorChartState = { labels: [], values: [] };
-const historyState = { all: [], filtered: [], filter: "1h", chart: null, loaded: false, unsubscribe: null };
+const historyState = { all: [], filtered: [], filter: "1h", locationFilter: "all", chart: null, loaded: false, unsubscribe: null };
 const predictionState = { data: null, loaded: false, unsubscribe: null, liveGeneratedAt: null };
+const deviceLocationState = { currentCode: "", currentSessionId: "" };
 const chart = new Chart(els.powerChart, {
   type: "line",
   data: {
@@ -415,13 +424,13 @@ function toFiniteNumber(value) { const n = Number(value); return Number.isFinite
 function historyTimeFormat(ms, withSeconds = false) { if (!Number.isFinite(ms)) return "—"; return new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", second: withSeconds ? "2-digit" : undefined }).format(new Date(ms)); }
 function historyDatePart(ms) { if (!Number.isFinite(ms)) return "—"; return new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric" }).format(new Date(ms)); }
 function historyTimePart(ms) { if (!Number.isFinite(ms)) return "—"; return new Intl.DateTimeFormat("id-ID", { hour: "2-digit", minute: "2-digit" }).format(new Date(ms)); }
-function parseHistorySnapshot(snap) { const out=[]; snap.forEach(child => { const val = child.val() || {}; const ts = toFiniteNumber(val.timestamp) ?? toFiniteNumber(child.key); if (!Number.isFinite(ts)) return; out.push({ key: child.key, timestamp: ts, voltage: toFiniteNumber(val.voltage), current: toFiniteNumber(val.current), power: toFiniteNumber(val.power), energy_kwh: toFiniteNumber(val.energy_kwh), frequency: toFiniteNumber(val.frequency), power_factor: toFiniteNumber(val.power_factor) }); }); out.sort((a,b)=>b.timestamp-a.timestamp); return out; }
+function parseHistorySnapshot(snap) { const out=[]; snap.forEach(child => { const val = child.val() || {}; const ts = toFiniteNumber(val.timestamp) ?? toFiniteNumber(child.key); if (!Number.isFinite(ts)) return; out.push({ key: child.key, timestamp: ts, voltage: toFiniteNumber(val.voltage), current: toFiniteNumber(val.current), power: toFiniteNumber(val.power), energy_kwh: toFiniteNumber(val.energy_kwh), frequency: toFiniteNumber(val.frequency), power_factor: toFiniteNumber(val.power_factor), location_code: val.location_code || "", session_id: val.session_id || "" }); }); out.sort((a,b)=>b.timestamp-a.timestamp); return out; }
 function historyFilterLabel(key) { return key === "1h" ? "1 Jam" : key === "6h" ? "6 Jam" : key === "24h" ? "24 Jam" : "7 Hari"; }
-function filterHistoryRecords(records, filterKey) { if (!records.length) return []; const latest = Math.max(...records.map(r=>r.timestamp).filter(Number.isFinite)); if (!Number.isFinite(latest)) return []; const cutoff = latest - (HISTORY_MS[filterKey] ?? HISTORY_MS["1h"]); return records.filter(r => r.timestamp >= cutoff); }
+function filterHistoryRecords(records, filterKey, locationKey) { if (!records.length) return []; let filtered = records; const locFilter = locationKey || "all"; if (locFilter !== "all") { filtered = filtered.filter(r => { if (locFilter === "unknown") return !r.location_code; return r.location_code === locFilter; }); } if (!filtered.length) return []; const latest = Math.max(...records.map(r=>r.timestamp).filter(Number.isFinite)); if (!Number.isFinite(latest)) return filtered; const cutoff = latest - (HISTORY_MS[filterKey] ?? HISTORY_MS["1h"]); return filtered.filter(r => r.timestamp >= cutoff); }
 function renderHistory() { const all = historyState.all; if (!all.length) { historyState.filtered=[]; els.historyCount.textContent="—"; els.historyRange.textContent="—"; els.historyAvgPower.textContent="—"; els.historyEnergySpan.textContent="—"; els.historyRowHint.textContent="0 catatan"; els.historyNotice.textContent="Belum ada data riwayat."; els.historyEmptyState.classList.remove("hidden"); els.historyTableBody.innerHTML=""; els.historyMobileList.innerHTML=""; if (historyState.chart) { historyState.chart.data.labels=[]; historyState.chart.data.datasets[0].data=[]; historyState.chart.update(); } return; }
-  const filtered = filterHistoryRecords(all, historyState.filter); historyState.filtered = filtered; const latest = all[0]; const oldest = all[all.length-1]; const coverage = latest.timestamp - oldest.timestamp; const requested = HISTORY_MS[historyState.filter] ?? HISTORY_MS["1h"]; const avgVals = filtered.map(r=>r.power).filter(v=>Number.isFinite(v)); const avgPower = avgVals.length ? avgVals.reduce((a,b)=>a+b,0)/avgVals.length : null; const firstEnergy = filtered.at(-1)?.energy_kwh; const lastEnergy = filtered[0]?.energy_kwh; const energySpan = Number.isFinite(firstEnergy) && Number.isFinite(lastEnergy) && lastEnergy >= firstEnergy ? lastEnergy - firstEnergy : null; const firstTs = filtered.at(-1)?.timestamp; const lastTs = filtered[0]?.timestamp; const sameDay = Number.isFinite(firstTs) && Number.isFinite(lastTs) && historyDatePart(firstTs) === historyDatePart(lastTs); els.historyCount.textContent = `${filtered.length} catatan`; els.historyRange.innerHTML = sameDay ? `${historyDatePart(firstTs)}<br><span>${historyTimePart(firstTs)} – ${historyTimePart(lastTs)}</span>` : `${historyTimeFormat(firstTs)} – ${historyTimeFormat(lastTs)}`; els.historyAvgPower.textContent = avgPower == null ? "—" : `${avgPower.toFixed(1)} W`; els.historyEnergySpan.textContent = energySpan == null ? "—" : `${energySpan.toFixed(4)} kWh`; els.historyRowHint.textContent = `${filtered.length} catatan`; els.historyNotice.textContent = coverage < requested ? `Data yang tersedia belum mencakup seluruh rentang ${historyFilterLabel(historyState.filter)}.` : `Menampilkan data ${historyFilterLabel(historyState.filter)}.`; els.historyChartHint.textContent = historyFilterLabel(historyState.filter); els.historyEmptyState.classList.toggle("hidden", filtered.length > 0); const rows = filtered.map(r => `<tr><td>${historyTimeFormat(r.timestamp)}</td><td>${r.voltage == null ? "—" : `${r.voltage.toFixed(1)} V`}</td><td>${r.current == null ? "—" : `${r.current.toFixed(3)} A`}</td><td>${r.power == null ? "—" : `${r.power.toFixed(1)} W`}</td><td>${r.energy_kwh == null ? "—" : `${r.energy_kwh.toFixed(4)} kWh`}</td><td>${r.frequency == null ? "—" : `${r.frequency.toFixed(1)} Hz`}</td><td>${r.power_factor == null ? "—" : r.power_factor.toFixed(2)}</td></tr>`).join(""); els.historyTableBody.innerHTML = rows; els.historyMobileList.innerHTML = filtered.map(r => `<article class="history-mobile-item"><div class="history-mobile-item__time">${historyTimeFormat(r.timestamp)}</div><div class="history-mobile-kv"><span>Daya</span><strong>${r.power == null ? "—" : `${r.power.toFixed(1)} W`}</strong><span>Tegangan</span><strong>${r.voltage == null ? "—" : `${r.voltage.toFixed(1)} V`}</strong><span>Arus</span><strong>${r.current == null ? "—" : `${r.current.toFixed(3)} A`}</strong><span>Energi</span><strong>${r.energy_kwh == null ? "—" : `${r.energy_kwh.toFixed(4)} kWh`}</strong><span>Frekuensi</span><strong>${r.frequency == null ? "—" : `${r.frequency.toFixed(1)} Hz`}</strong><span>Power Factor</span><strong>${r.power_factor == null ? "—" : r.power_factor.toFixed(2)}</strong></div></article>`).join(""); const chartData = filtered.slice().reverse().map(r=>({label:new Date(r.timestamp).toLocaleTimeString("id-ID", {hour:"2-digit", minute:"2-digit"}), value:r.power})); if (!historyState.chart) { historyState.chart = new Chart(els.historyPowerChart, { type:"line", data:{ labels: chartData.map(x=>x.label), datasets:[{ label:"Daya (W)", data: chartData.map(x=>x.value), borderColor:"#006b55", backgroundColor:"rgba(0,107,85,.12)", tension:0.35, fill:true, pointRadius:0, borderWidth:2 }]}, options:{ responsive:true, maintainAspectRatio:false, animation:false, plugins:{ legend:{display:false} }, scales:{ x:{ grid:{display:false}, ticks:{maxRotation:0, autoSkip:true} }, y:{ beginAtZero:true } } } }); } else { historyState.chart.data.labels = chartData.map(x=>x.label); historyState.chart.data.datasets[0].data = chartData.map(x=>x.value); historyState.chart.update(); } }
+  const filtered = filterHistoryRecords(all, historyState.filter, historyState.locationFilter); historyState.filtered = filtered; const latest = all[0]; const oldest = all[all.length-1]; const coverage = latest.timestamp - oldest.timestamp; const requested = HISTORY_MS[historyState.filter] ?? HISTORY_MS["1h"]; const avgVals = filtered.map(r=>r.power).filter(v=>Number.isFinite(v)); const avgPower = avgVals.length ? avgVals.reduce((a,b)=>a+b,0)/avgVals.length : null; const firstEnergy = filtered.at(-1)?.energy_kwh; const lastEnergy = filtered[0]?.energy_kwh; const energySpan = Number.isFinite(firstEnergy) && Number.isFinite(lastEnergy) && lastEnergy >= firstEnergy ? lastEnergy - firstEnergy : null; const firstTs = filtered.at(-1)?.timestamp; const lastTs = filtered[0]?.timestamp; const sameDay = Number.isFinite(firstTs) && Number.isFinite(lastTs) && historyDatePart(firstTs) === historyDatePart(lastTs); els.historyCount.textContent = `${filtered.length} catatan`; els.historyRange.innerHTML = sameDay ? `${historyDatePart(firstTs)}<br><span>${historyTimePart(firstTs)} – ${historyTimePart(lastTs)}</span>` : `${historyTimeFormat(firstTs)} – ${historyTimeFormat(lastTs)}`; els.historyAvgPower.textContent = avgPower == null ? "—" : `${avgPower.toFixed(1)} W`; els.historyEnergySpan.textContent = energySpan == null ? "—" : `${energySpan.toFixed(4)} kWh`; els.historyRowHint.textContent = `${filtered.length} catatan`; els.historyNotice.textContent = coverage < requested ? `Data yang tersedia belum mencakup seluruh rentang ${historyFilterLabel(historyState.filter)}.` : `Menampilkan data ${historyFilterLabel(historyState.filter)}.`; els.historyChartHint.textContent = historyFilterLabel(historyState.filter); els.historyEmptyState.classList.toggle("hidden", filtered.length > 0); const locLabel = (code) => resolveLocationLabel(code); const rows = filtered.map(r => `<tr><td>${historyTimeFormat(r.timestamp)}</td><td>${locLabel(r.location_code)}</td><td>${r.voltage == null ? "—" : `${r.voltage.toFixed(1)} V`}</td><td>${r.current == null ? "—" : `${r.current.toFixed(3)} A`}</td><td>${r.power == null ? "—" : `${r.power.toFixed(1)} W`}</td><td>${r.energy_kwh == null ? "—" : `${r.energy_kwh.toFixed(4)} kWh`}</td><td>${r.frequency == null ? "—" : `${r.frequency.toFixed(1)} Hz`}</td><td>${r.power_factor == null ? "—" : r.power_factor.toFixed(2)}</td></tr>`).join(""); els.historyTableBody.innerHTML = rows; els.historyMobileList.innerHTML = filtered.map(r => `<article class="history-mobile-item"><div class="history-mobile-item__time">${historyTimeFormat(r.timestamp)}</div><div class="history-mobile-kv"><span>Lokasi</span><strong>${locLabel(r.location_code)}</strong><span>Daya</span><strong>${r.power == null ? "—" : `${r.power.toFixed(1)} W`}</strong><span>Tegangan</span><strong>${r.voltage == null ? "—" : `${r.voltage.toFixed(1)} V`}</strong><span>Arus</span><strong>${r.current == null ? "—" : `${r.current.toFixed(3)} A`}</strong><span>Energi</span><strong>${r.energy_kwh == null ? "—" : `${r.energy_kwh.toFixed(4)} kWh`}</strong><span>Frekuensi</span><strong>${r.frequency == null ? "—" : `${r.frequency.toFixed(1)} Hz`}</strong><span>Power Factor</span><strong>${r.power_factor == null ? "—" : r.power_factor.toFixed(2)}</strong></div></article>`).join(""); const chartData = filtered.slice().reverse().map(r=>({label:new Date(r.timestamp).toLocaleTimeString("id-ID", {hour:"2-digit", minute:"2-digit"}), value:r.power})); if (!historyState.chart) { historyState.chart = new Chart(els.historyPowerChart, { type:"line", data:{ labels: chartData.map(x=>x.label), datasets:[{ label:"Daya (W)", data: chartData.map(x=>x.value), borderColor:"#006b55", backgroundColor:"rgba(0,107,85,.12)", tension:0.35, fill:true, pointRadius:0, borderWidth:2 }]}, options:{ responsive:true, maintainAspectRatio:false, animation:false, plugins:{ legend:{display:false} }, scales:{ x:{ grid:{display:false}, ticks:{maxRotation:0, autoSkip:true} }, y:{ beginAtZero:true } } } }); } else { historyState.chart.data.labels = chartData.map(x=>x.label); historyState.chart.data.datasets[0].data = chartData.map(x=>x.value); historyState.chart.update(); } }
 function loadHistory() { if (historyState.unsubscribe) return; const historyRef = query(ref(db, `readings/${DEVICE_ID}`), orderByKey(), limitToLast(500)); historyState.unsubscribe = onValue(historyRef, snap => { historyState.all = parseHistorySnapshot(snap); historyState.loaded = true; renderHistory(); }, () => { els.historyNotice.textContent = "Gagal mengambil data riwayat."; }); }
-function exportHistoryCsv() { const data = historyState.filtered.length ? historyState.filtered : []; if (!data.length) return; const rows = ["timestamp,datetime,voltage,current,power,energy_kwh,frequency,power_factor"]; for (const r of data.slice().reverse()) rows.push([r.timestamp, `"${historyTimeFormat(r.timestamp, true)}"`, r.voltage ?? "", r.current ?? "", r.power ?? "", r.energy_kwh ?? "", r.frequency ?? "", r.power_factor ?? ""].join(",")); const blob = new Blob([rows.join("\n")], { type:"text/csv;charset=utf-8;" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `smart-energy-history-${new Date().toISOString().slice(0,10)}.csv`; a.click(); URL.revokeObjectURL(url); }
+function exportHistoryCsv() { const data = historyState.filtered.length ? historyState.filtered : []; if (!data.length) return; const rows = ["timestamp,datetime,voltage,current,power,energy_kwh,frequency,power_factor,location_code,location_label,session_id"]; for (const r of data.slice().reverse()) rows.push([r.timestamp, `"${historyTimeFormat(r.timestamp, true)}"`, r.voltage ?? "", r.current ?? "", r.power ?? "", r.energy_kwh ?? "", r.frequency ?? "", r.power_factor ?? "", r.location_code || "", `"${resolveLocationLabel(r.location_code)}"`, r.session_id || ""].join(",")); const blob = new Blob([rows.join("\n")], { type:"text/csv;charset=utf-8;" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `smart-energy-history-${new Date().toISOString().slice(0,10)}.csv`; a.click(); URL.revokeObjectURL(url); }
 
 function validPredictionValue(value) { if (value === null || value === undefined || value === "") return null; const n = Number(value); return Number.isFinite(n) ? n : null; }
 function fmtPredictionValue(value, digits, suffix = "") { const n = validPredictionValue(value); if (n === null) return "—"; return `${n.toFixed(digits)}${suffix}`; }
@@ -816,6 +825,99 @@ function syncSettingsUI() {
   if (els.settingsDeviceStatus) els.settingsDeviceStatus.textContent = latestState ? (Number.isFinite(Number(latestState.timestamp)) && (Date.now() - Number(latestState.timestamp) <= 30000) ? "ONLINE" : "OFFLINE") : "--";
   if (els.settingsModelStatus) els.settingsModelStatus.textContent = predictionState.data ? "Model aktif" : "Belum tersedia";
   if (els.settingsMsg) els.settingsMsg.textContent = "";
+  // Location UI
+  if (els.locationSelect) els.locationSelect.value = deviceLocationState.currentCode || "";
+  if (els.settingsLocationValue) els.settingsLocationValue.textContent = deviceLocationState.currentCode ? (LOCATION_ALLOWLIST[deviceLocationState.currentCode] || deviceLocationState.currentCode) : "Tidak diketahui";
+  if (els.settingsSessionValue) els.settingsSessionValue.textContent = deviceLocationState.currentSessionId || "—";
+  if (els.locationMsg) els.locationMsg.textContent = "";
+}
+
+// ── Location helpers ──
+function resolveLocationLabel(code) {
+  if (!code || !LOCATION_ALLOWLIST[code]) return LOCATION_UNKNOWN_LABEL;
+  return LOCATION_ALLOWLIST[code];
+}
+function generateSessionId(code) {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  const ts = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+  return `${DEVICE_ID}_${code}_${ts}`;
+}
+async function readDeviceConfig() {
+  try {
+    const snap = await fbGet(ref(db, `devices/${DEVICE_ID}/config`));
+    if (snap.exists()) {
+      const cfg = snap.val();
+      const code = cfg.location_code || "";
+      const sid = cfg.session_id || "";
+      if (code && LOCATION_ALLOWLIST[code]) {
+        deviceLocationState.currentCode = code;
+        deviceLocationState.currentSessionId = sid;
+      }
+    }
+  } catch (e) {
+    console.warn("Config read failed:", e);
+  }
+}
+async function writeDeviceConfig(code, sessionId) {
+  const cfg = {
+    location_code: code,
+    session_id: sessionId,
+    updated_at: new Date().toISOString(),
+    updated_by: auth.currentUser?.email || "dashboard",
+  };
+  await fbSet(ref(db, `devices/${DEVICE_ID}/config`), cfg);
+}
+async function createSession(code) {
+  const now = new Date().toISOString();
+  const sessionId = generateSessionId(code);
+  // Close previous session if exists
+  if (deviceLocationState.currentSessionId) {
+    try {
+      await fbSet(ref(db, `sessions/${deviceLocationState.currentSessionId}/ended_at`), now);
+    } catch (e) { console.warn("Close old session failed:", e); }
+  }
+  // Create new session
+  await fbSet(ref(db, `sessions/${sessionId}`), {
+    device_id: DEVICE_ID,
+    location_code: code,
+    started_at: now,
+    ended_at: null,
+  });
+  return sessionId;
+}
+async function saveLocation() {
+  if (!auth.currentUser) { els.locationMsg.textContent = "Login diperlukan."; return; }
+  const code = els.locationSelect?.value || "";
+  if (!code && deviceLocationState.currentCode) {
+    els.locationMsg.textContent = "Gunakan salah satu lokasi yang tersedia. Tidak bisa direset ke tidak diketahui.";
+    els.locationSelect.value = deviceLocationState.currentCode;
+    return;
+  }
+  if (code && !LOCATION_ALLOWLIST[code]) { els.locationMsg.textContent = "Lokasi tidak valid."; return; }
+  // Same location → no new session
+  if (code === deviceLocationState.currentCode) {
+    els.locationMsg.textContent = "Lokasi sama, tidak ada perubahan.";
+    return;
+  }
+  try {
+    const sessionId = code ? await createSession(code) : "";
+    await writeDeviceConfig(code, sessionId);
+    deviceLocationState.currentCode = code;
+    deviceLocationState.currentSessionId = sessionId;
+    els.locationMsg.textContent = code ? `Lokasi diubah ke ${LOCATION_ALLOWLIST[code]}. Sesi baru dimulai.` : "Lokasi pertama kali ditetapkan.";
+    syncSettingsUI();
+  } catch (e) {
+    els.locationMsg.textContent = "Gagal menyimpan lokasi.";
+    console.error("saveLocation error:", e);
+  }
+}
+function updateDeviceLocationDisplay() {
+  // From latest stamped data
+  const loc = latestState?.location_code;
+  const label = resolveLocationLabel(loc);
+  if (els.deviceLocationChip) els.deviceLocationChip.textContent = `Lokasi: ${label}`;
+  if (els.monitorLocationValue) els.monitorLocationValue.textContent = label;
 }
 function saveUsageBefore() {
   const raw = els.usageBeforeMonitoringInput?.value?.trim();
@@ -901,6 +1003,7 @@ function renderState(data) {
   els.pfValue.textContent = fmtNumber(t.pf, 2);
   els.lastUpdateText.textContent = t.timeLabel;
   els.updatedAgo.textContent = t.agoLabel;
+  updateDeviceLocationDisplay();
   const usageBefore = getUsageBeforeMonitoring();
   const monthly = Number.isFinite(t.energy)
     ? updateMonthlyUsageState(t.energy, t.ts)
@@ -994,6 +1097,8 @@ els.navButtons.forEach(btn => btn.addEventListener("click", () => setActivePage(
 els.historyRangeFilter?.addEventListener("click", (e) => { const btn = e.target.closest("button[data-range]"); if (!btn) return; historyState.filter = btn.dataset.range; els.historyRangeFilter.querySelectorAll(".segmented__item").forEach(x => x.classList.toggle("segmented__item--active", x === btn)); renderHistory(); });
 els.exportCsvBtn?.addEventListener("click", exportHistoryCsv);
 els.runPredictionBtn?.addEventListener("click", () => { runLivePrediction(); });
+els.saveLocationBtn?.addEventListener("click", saveLocation);
+els.historyLocationFilter?.addEventListener("change", (e) => { historyState.locationFilter = e.target.value; renderHistory(); });
 
 
 onAuthStateChanged(auth, (user) => {
@@ -1008,6 +1113,7 @@ onAuthStateChanged(auth, (user) => {
     loadHistory();
     loadPrediction();
     syncSettingsUI();
+    readDeviceConfig();
     setActivePage('dashboard');
   } else {
     els.appView.classList.add("hidden");

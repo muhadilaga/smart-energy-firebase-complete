@@ -89,6 +89,7 @@
               <div class="badge-row">
                 <span class="status-dot status-dot--online" id="statusDot"></span>
                 <span id="deviceStatus" class="status-text">Memuat...</span>
+                <span class="chip chip--muted" id="deviceLocationChip">Lokasi: —</span>
               </div>
               <h2>Daya Saat Ini</h2>
               <p class="muted">ESP32-01 · Real-time</p>
@@ -235,6 +236,7 @@
           </div>
           <div class="monitor-meta">
             <div><span>Perangkat</span><strong>ESP32-01</strong></div>
+            <div><span>Lokasi</span><strong id="monitorLocationValue">Tidak diketahui</strong></div>
             <div><span>Waktu update terakhir</span><strong id="monitorUpdatedAgo">--</strong></div>
           </div>
         </section>
@@ -331,6 +333,17 @@
               <button type="button" class="segmented__item" data-range="24h">24 Jam</button>
               <button type="button" class="segmented__item" data-range="7d">7 Hari</button>
             </div>
+            <div class="history-location-filter">
+              <label class="history-location-filter__label" for="historyLocationFilter">Lokasi:</label>
+              <select id="historyLocationFilter" class="history-location-filter__select">
+                <option value="all">Semua Lokasi</option>
+                <option value="unknown">Lokasi tidak diketahui</option>
+                <option value="ruang_kerja">Ruang Kerja</option>
+                <option value="kamar_tidur">Kamar Tidur</option>
+                <option value="ruang_tamu">Ruang Tamu</option>
+                <option value="dapur">Dapur</option>
+              </select>
+            </div>
             <button id="exportCsvBtn" class="primary-btn history-export" type="button">Ekspor CSV</button>
           </div>
           <p id="historyNotice" class="history-notice"></p>
@@ -356,7 +369,7 @@
             <table class="history-table">
               <thead>
                 <tr>
-                  <th>Waktu</th><th>Tegangan</th><th>Arus</th><th>Daya</th><th>Energi</th><th>Frekuensi</th><th>PF</th>
+                  <th>Waktu</th><th>Lokasi</th><th>Tegangan</th><th>Arus</th><th>Daya</th><th>Energi</th><th>Frekuensi</th><th>PF</th>
                 </tr>
               </thead>
               <tbody id="historyTableBody"></tbody>
@@ -414,6 +427,39 @@
             <button id="resetPzemBaselineBtn" class="secondary-btn" type="button">Reset Baseline PZEM</button>
           </div>
           <p id="settingsMsg" class="message settings-message" role="status" aria-live="polite"></p>
+        </section>
+
+        <section class="card settings-card">
+          <div class="section-head section-head--stack">
+            <div>
+              <h3>Lokasi Perangkat Saat Ini</h3>
+              <p class="subtitle subtitle--compact">Lokasi digunakan untuk memberi konteks pada data pengukuran baru. Mengubah lokasi akan memulai sesi pengukuran baru.</p>
+            </div>
+          </div>
+          <label class="field settings-field">
+            <span>Lokasi</span>
+            <select id="locationSelect">
+              <option value="">Lokasi tidak diketahui</option>
+              <option value="ruang_kerja">Ruang Kerja</option>
+              <option value="kamar_tidur">Kamar Tidur</option>
+              <option value="ruang_tamu">Ruang Tamu</option>
+              <option value="dapur">Dapur</option>
+            </select>
+          </label>
+          <div id="locationCurrentInfo" class="settings-info-grid settings-info-grid--device" style="margin-top:12px">
+            <div class="settings-info-item">
+              <div class="settings-info-label">Lokasi Aktif</div>
+              <div class="settings-info-value" id="settingsLocationValue">Tidak diketahui</div>
+            </div>
+            <div class="settings-info-item">
+              <div class="settings-info-label">Sesi Aktif</div>
+              <div class="settings-info-value" id="settingsSessionValue">—</div>
+            </div>
+          </div>
+          <div class="settings-actions">
+            <button id="saveLocationBtn" class="primary-btn" type="button">Simpan Lokasi</button>
+          </div>
+          <p id="locationMsg" class="message settings-message" role="status" aria-live="polite"></p>
         </section>
 
         <section class="card settings-card">
