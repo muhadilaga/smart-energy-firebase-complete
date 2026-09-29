@@ -114,6 +114,9 @@ const els = {
   predictionCategoryValue: document.getElementById("predictionCategoryValue"),
   predictionCategoryThreshold: document.getElementById("predictionCategoryThreshold"),
   predictionCategoryNote: document.getElementById("predictionCategoryNote"),
+  predictionContextCard: document.getElementById("predictionContextCard"),
+  predictionContextLabel: document.getElementById("predictionContextLabel"),
+  predictionContextDetail: document.getElementById("predictionContextDetail"),
   runPredictionBtn: document.getElementById("runPredictionBtn"),
   predictionRunStatus: document.getElementById("predictionRunStatus"),
   runPredictionBtnText: document.querySelector("#runPredictionBtn .prediction-run-btn__text"),
@@ -510,6 +513,8 @@ function resetPredictionUi() {
   if (els.predictionCategoryThreshold) els.predictionCategoryThreshold.textContent = "Batas historis: —";
   if (els.predictionCategoryNote) els.predictionCategoryNote.textContent = "";
   if (els.predictionCategoryCard) els.predictionCategoryCard.className = "prediction-card prediction-card--category";
+  if (els.predictionContextLabel) els.predictionContextLabel.textContent = "\u2014";
+  if (els.predictionContextDetail) els.predictionContextDetail.textContent = "";
 }
 function setPredictionState(data) {
   const hasData = hasPredictionPayload(data);
@@ -628,18 +633,55 @@ function setPredictionState(data) {
     const parts = [];
     if (cat === "BOROS" && catValid) {
       parts.push("Prediksi konsumsi berada di atas batas historis penggunaan perangkat ini.");
-      parts.push("Batas historis berasal dari pola penggunaan perangkat ini, bukan standar konsumsi rumah tangga nasional.");
     } else if (cat === "NORMAL" && catValid) {
       parts.push("Prediksi konsumsi masih berada pada atau di bawah batas historis penggunaan perangkat ini.");
-      parts.push("Batas historis berasal dari pola penggunaan perangkat ini, bukan standar konsumsi rumah tangga nasional.");
     } else if (cat === "TIDAK_TERSEDIA") {
       parts.push("Kategori konsumsi belum dapat ditentukan karena data historis belum mencukupi.");
     }
     if (!catValid && cat && cat !== "TIDAK_TERSEDIA") {
       parts.push("Kategori berdasarkan prediksi historis dan tidak merepresentasikan kondisi konsumsi saat ini.");
-      parts.push("Batas historis berasal dari pola penggunaan perangkat ini, bukan standar konsumsi rumah tangga nasional.");
     }
+    parts.push("Batas historis dihitung dari seluruh riwayat penggunaan perangkat, tanpa memandang lokasi pengukuran.");
     els.predictionCategoryNote.textContent = parts.join(" ");
+  }
+
+  // ── Prediction context rendering ──
+  if (els.predictionContextLabel) {
+    const ctx = data.prediction_context;
+    if (!ctx || typeof ctx !== "object") {
+      els.predictionContextLabel.textContent = "\u2014";
+      if (els.predictionContextDetail) els.predictionContextDetail.textContent = "";
+    } else if (ctx.purity === "SINGLE") {
+      els.predictionContextLabel.textContent = ctx.location_label || LOCATION_UNKNOWN_LABEL;
+      if (els.predictionContextDetail) {
+        els.predictionContextDetail.textContent = ctx.session_id
+          ? `Sesi: ${ctx.session_id}`
+          : "";
+      }
+    } else if (ctx.purity === "MIXED") {
+      els.predictionContextLabel.textContent = "Campuran beberapa sesi/lokasi";
+      if (els.predictionContextDetail) {
+        const codes = (ctx.location_codes || []).map(c => LOCATION_ALLOWLIST[c] || c).join(", ");
+        els.predictionContextDetail.textContent = codes ? `Lokasi terdeteksi: ${codes}` : "";
+      }
+    } else if (ctx.purity === "PARTIAL") {
+      if (ctx.location_label) {
+        els.predictionContextLabel.textContent = `${ctx.location_label} (metadata sebagian)`;
+      } else {
+        els.predictionContextLabel.textContent = "Metadata lokasi sebagian";
+      }
+      if (els.predictionContextDetail) {
+        els.predictionContextDetail.textContent = "Beberapa pembacaan tidak memiliki metadata lokasi/sesi lengkap.";
+      }
+    } else if (ctx.purity === "UNKNOWN") {
+      els.predictionContextLabel.textContent = LOCATION_UNKNOWN_LABEL;
+      if (els.predictionContextDetail) {
+        els.predictionContextDetail.textContent = "Data prediksi berasal dari pencatatan sebelum fitur lokasi tersedia.";
+      }
+    } else {
+      els.predictionContextLabel.textContent = "\u2014";
+      if (els.predictionContextDetail) els.predictionContextDetail.textContent = "";
+    }
   }
 
   if (els.settingsModelStatus) els.settingsModelStatus.textContent = hasData ? (stale ? "Model aktif, prediksi bukan jam berjalan" : "Model aktif") : "Belum tersedia";

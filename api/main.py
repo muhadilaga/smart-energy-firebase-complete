@@ -120,6 +120,130 @@ def verify_firebase_id_token(id_token: str) -> None:
         )
 
 
+LOCATION_ALLOWLIST = {
+    "ruang_kerja": "Ruang Kerja",
+    "kamar_tidur": "Kamar Tidur",
+    "ruang_tamu": "Ruang Tamu",
+    "dapur": "Dapur",
+}
+
+
+def resolve_prediction_context(raw_records: dict, prediction_feature_timestamp: str) -> dict | None:
+    """Resolve prediction source location/session metadata from raw Firebase records.
+
+    Classifies context purity based on metadata completeness in the source
+    feature hour (the hour of prediction_feature_timestamp).
+
+    Purity states:
+      SINGLE  — all source readings complete, exactly one (location, session) pair
+      MIXED   — multiple distinct complete (location, session) pairs
+      PARTIAL — at least one complete pair and at least one incomplete reading
+      UNKNOWN — source readings exist but none have complete metadata
+      null    — no source readings map to the feature hour
+    """
+    from datetime import datetime, timedelta, timezone
+
+    if not raw_records or not prediction_feature_timestamp:
+        return None
+
+    # Parse feature timestamp to milliseconds epoch
+    try:
+        ft = datetime.fromisoformat(prediction_feature_timestamp)
+        if ft.tzinfo is None:
+            ft = ft.replace(tzinfo=timezone.utc)
+        hour_start_ms = int(ft.timestamp() * 1000)
+        hour_end_ms = hour_start_ms + 3_600_000
+    except (ValueError, OSError):
+        return None
+
+    def _parse_ts(key: str, record: dict):
+        ts = record.get("timestamp")
+        if ts is not None:
+            try:
+                return int(float(ts))
+            except (TypeError, ValueError):
+                pass
+        if key.isdigit():
+            return int(key)
+        return None
+
+    # Collect readings in the feature hour
+    source_readings = []
+    for key, record in raw_records.items():
+        if not isinstance(record, dict):
+            continue
+        ts = _parse_ts(str(key), record)
+        if ts is not None and hour_start_ms <= ts < hour_end_ms:
+            source_readings.append(record)
+
+    if not source_readings:
+        return None
+
+    # Classify metadata completeness per reading
+    complete_pairs = set()
+    has_incomplete = False
+    for r in source_readings:
+        loc = (r.get("location_code") or "").strip()
+        sess = (r.get("session_id") or "").strip()
+        if loc and sess:
+            complete_pairs.add((loc, sess))
+        else:
+            has_incomplete = True
+
+    all_location_codes = set()
+    all_session_ids = set()
+    for r in source_readings:
+        loc = (r.get("location_code") or "").strip()
+        sess = (r.get("session_id") or "").strip()
+        if loc:
+            all_location_codes.add(loc)
+        if sess:
+            all_session_ids.add(sess)
+
+    sorted_location_codes = sorted(all_location_codes)
+    sorted_session_ids = sorted(all_session_ids)
+
+    if not complete_pairs:
+        if has_incomplete:
+            # readings exist but none have complete metadata
+            purity = "UNKNOWN"
+        else:
+            purity = "UNKNOWN"
+    elif len(complete_pairs) > 1:
+        purity = "MIXED"
+    else:
+        # exactly one complete pair
+        if has_incomplete:
+            purity = "PARTIAL"
+        else:
+            purity = "SINGLE"
+
+    result = {
+        "purity": purity,
+        "location_codes": sorted_location_codes,
+        "session_ids": sorted_session_ids,
+    }
+
+    if purity == "SINGLE":
+        loc_code, sess_id = next(iter(complete_pairs))
+        label = LOCATION_ALLOWLIST.get(loc_code, "Lokasi tidak diketahui")
+        result["location_code"] = loc_code
+        result["location_label"] = label
+        result["session_id"] = sess_id
+    elif purity == "PARTIAL" and len(complete_pairs) == 1:
+        loc_code, sess_id = next(iter(complete_pairs))
+        label = LOCATION_ALLOWLIST.get(loc_code, "Lokasi tidak diketahui")
+        result["location_code"] = loc_code
+        result["location_label"] = label
+        result["session_id"] = sess_id
+    else:
+        result["location_code"] = None
+        result["location_label"] = None
+        result["session_id"] = None
+
+    return result
+
+
 def attach_evaluation(prediction: dict) -> dict:
     payload = dict(prediction)
     version = _resolve_model_version()
@@ -224,6 +348,17 @@ def run_prediction(
                 data_path=live_csv,
                 output_path=live_json
             )
+
+            # Resolve prediction source context from raw records
+            try:
+                prediction_context = resolve_prediction_context(
+                    records,
+                    prediction.get("prediction_feature_timestamp", ""),
+                )
+            except Exception:
+                prediction_context = None
+            prediction["prediction_context"] = prediction_context
+
             prediction = attach_evaluation(prediction)
 
             return {

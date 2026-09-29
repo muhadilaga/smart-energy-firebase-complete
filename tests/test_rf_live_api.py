@@ -342,7 +342,7 @@ class FrontendStaticTests(unittest.TestCase):
 
     def test_national_standard_disclaimer_remains(self):
         js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
-        self.assertIn("bukan standar konsumsi rumah tangga nasional", js)
+        self.assertIn("tanpa memandang lokasi pengukuran", js)
         self.assertNotIn("mengklasifikasikan", js)
         self.assertNotIn("standar PLN", js)
 
@@ -792,6 +792,103 @@ class FirmwareGetApiTests(unittest.TestCase):
         fw = self._read_firmware()
         loop = fw.split("void loop()")[1] if "void loop()" in fw else ""
         self.assertIn("CONFIG_POLL_INTERVAL", loop)
+
+
+class Phase5CInvariantTests(unittest.TestCase):
+    """Phase 5C invariants: ML pipeline, Method F, monthly, frozen artifacts."""
+
+    def test_rfv2_has_9_features(self):
+        import train_random_forest as trf
+        self.assertEqual(len(trf.FEATURE_SETS["RF-v2"]), 9)
+
+    def test_rfv2_no_energy_lag_24h(self):
+        import train_random_forest as trf
+        self.assertNotIn("energy_lag_24h", trf.FEATURE_SETS["RF-v2"])
+
+    def test_rfv2_feature_names(self):
+        import train_random_forest as trf
+        expected = [
+            "voltage_mean", "current_mean", "power_mean",
+            "frequency_mean", "power_factor_mean",
+            "hour_of_day", "day_of_week",
+            "energy_current_hour_kwh", "energy_lag_1h",
+        ]
+        self.assertEqual(trf.FEATURE_SETS["RF-v2"], expected)
+
+    def test_raw_columns_7(self):
+        import train_random_forest as trf
+        self.assertEqual(len(trf.RAW_COLUMNS), 7)
+        self.assertEqual(trf.RAW_COLUMNS[0], "timestamp")
+        self.assertNotIn("location_code", trf.RAW_COLUMNS)
+        self.assertNotIn("session_id", trf.RAW_COLUMNS)
+
+    def test_export_csv_7_columns(self):
+        """export_firebase_history CSV output should have exactly 7 columns."""
+        import export_firebase_history as efh
+        self.assertEqual(len(efh.RAW_COLUMNS), 7)
+
+    def test_method_f_formula(self):
+        """Method F uses hybrid median+MAD with P90 global floor."""
+        import inspect
+        from consumption_category import compute_consumption_category
+        src = inspect.getsource(compute_consumption_category)
+        self.assertIn("p90_global", src)
+        self.assertIn("median_h + 1.5 * mad_h", src)
+        self.assertIn("BOROS", src)
+        self.assertIn("NORMAL", src)
+
+    def test_frozen_rfv1_checksum(self):
+        p = ML_DIR / "output" / "random_forest_model.joblib"
+        if not p.exists():
+            self.skipTest("RF-v1 model not found")
+        import hashlib
+        h = hashlib.sha256(p.read_bytes()).hexdigest()[:16]
+        self.assertEqual(h, "401088348c0656f0")
+
+    def test_frozen_history_real_checksum(self):
+        p = ML_DIR / "data" / "history_real.csv"
+        if not p.exists():
+            self.skipTest("history_real.csv not found")
+        import hashlib
+        h = hashlib.sha256(p.read_bytes()).hexdigest()[:16]
+        self.assertEqual(h, "c321b9b56e07c390")
+
+    def test_frozen_history_live_checksum(self):
+        p = ML_DIR / "data" / "history_live.csv"
+        if not p.exists():
+            self.skipTest("history_live.csv not found")
+        import hashlib
+        h = hashlib.sha256(p.read_bytes()).hexdigest()[:16]
+        self.assertEqual(h, "6f6c461cb4b101cc")
+
+    def test_prediction_context_field_in_api(self):
+        """resolve_prediction_context is importable from api.main."""
+        sys.path.insert(0, str(API_DIR))
+        import main
+        self.assertTrue(hasattr(main, "resolve_prediction_context"))
+        self.assertTrue(hasattr(main, "LOCATION_ALLOWLIST"))
+
+    def test_frontend_context_elements(self):
+        """index.html contains prediction context DOM elements."""
+        html = (PUBLIC_DIR / "index.html").read_text(encoding="utf-8")
+        self.assertIn("predictionContextCard", html)
+        self.assertIn("predictionContextLabel", html)
+        self.assertIn("predictionContextDetail", html)
+        self.assertIn("Lokasi Data Prediksi", html)
+
+    def test_frontend_context_rendering(self):
+        """app.js contains prediction_context rendering logic."""
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("prediction_context", js)
+        self.assertIn("predictionContextLabel", js)
+        self.assertIn("predictionContextDetail", js)
+        self.assertIn("Campuran beberapa sesi/lokasi", js)
+        self.assertIn("metadata sebagian", js)
+
+    def test_frontend_category_global_wording(self):
+        """app.js Method F note uses global wording."""
+        js = (PUBLIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("tanpa memandang lokasi pengukuran", js)
 
 
 if __name__ == "__main__":

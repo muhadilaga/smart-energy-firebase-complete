@@ -182,6 +182,8 @@ h3{font-size:18px;line-height:1.2}
 .prediction-card--stale{opacity:.72}
 .prediction-card--stale strong{color:var(--muted) !important}
 .prediction-card--category small{font-size:12px;line-height:1.4}
+.prediction-context-card small{font-size:12px;line-height:1.4}
+.prediction-card--mixed strong{color:#d4a017}
 .prediction-info-text{margin:16px 0 0;color:var(--muted);font-size:13px;line-height:1.65;max-width:920px}
 .prediction-warning{margin:12px 0 0;color:#8a5a00;font-size:13px;line-height:1.55;font-weight:700}
 .prediction-coverage-warning{margin:16px 0 0;padding:16px;border-radius:20px;background:var(--surface);box-shadow:inset 4px 4px 8px var(--shadow-lo),inset -4px -4px 8px var(--shadow-hi);border-left:4px solid #c98600}
